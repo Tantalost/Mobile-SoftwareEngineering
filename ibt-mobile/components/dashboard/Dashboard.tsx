@@ -122,7 +122,6 @@ export const Dashboard: React.FC = () => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Where To Section */}
         <Card style={[styles.sectionCard, styles.whereCard]} mode="elevated" elevation={3}>
           <Card.Content style={styles.whereContent}>
             <Text variant="titleLarge" style={styles.whereTitle}>
