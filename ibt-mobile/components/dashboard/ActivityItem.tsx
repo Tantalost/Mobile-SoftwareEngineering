@@ -11,9 +11,6 @@ interface ActivityItemProps {
   iconColor: string;
 }
 
-/**
- * Component for displaying individual activity items in the recent activity list
- */
 export const ActivityItem: React.FC<ActivityItemProps> = ({
   title,
   description,

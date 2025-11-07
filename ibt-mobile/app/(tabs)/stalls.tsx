@@ -99,7 +99,6 @@ export default function StallsPage() {
           </Card.Content>
         </Card>
 
-        {/* Availability Summary */}
         <View style={styles.summaryContainer}>
           <View style={styles.summaryItem}>
             <View style={[styles.legendDot, { backgroundColor: '#E0E0E0' }]} />
@@ -151,14 +150,12 @@ export default function StallsPage() {
                 const row = rowIndex + 1;
                 return (
                   <View key={row} style={styles.stallRow}>
-                    {/* Row Label */}
                     <View style={styles.rowLabel}>
                       <Text variant="labelMedium" style={styles.rowLabelText}>
                         Row {row}
                       </Text>
                     </View>
 
-                    {/* Stalls */}
                     {Array.from({ length: cols }, (_, colIndex) => {
                       const col = colIndex + 1;
                       const status = getStallStatus(row, col);
