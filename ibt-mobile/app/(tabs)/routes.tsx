@@ -13,46 +13,57 @@ export default function RoutesPage() {
     {
       id: 1,
       routeNumber: 'Route 101',
-      name: 'Downtown Express',
-      origin: 'Central Station',
-      destination: 'University Campus',
-      stops: ['Central Station', 'Main Square', 'Park Avenue', 'University Campus'],
-      duration: '25 min',
+      name: 'Ceres',
+      origin: 'Zamboanga City',
+      destination: 'Ipil',
+      stops: ['Zamboanga City', 'Ipil'],
+      duration: '5 hours',
       frequency: 'Every 15 min',
       status: 'active',
     },
     {
       id: 2,
       routeNumber: 'Route 202',
-      name: 'Coastal Line',
-      origin: 'Beach Terminal',
-      destination: 'City Center',
-      stops: ['Beach Terminal', 'Marina Bay', 'Shopping District', 'City Center'],
-      duration: '35 min',
+      name: 'Dindo',
+      origin: 'Zamboanga City',
+      destination: 'Pagadian',
+      stops: ['Zamboanga City', 'Pagadian'],
+      duration: '10 hours',
       frequency: 'Every 20 min',
       status: 'active',
     },
     {
       id: 3,
       routeNumber: 'Route 303',
-      name: 'Airport Shuttle',
-      origin: 'Airport Terminal',
-      destination: 'Downtown',
-      stops: ['Airport Terminal', 'Business District', 'Downtown'],
-      duration: '45 min',
+      name: 'Alga',
+      origin: 'Zamboanga City',
+      destination: 'Dipolog',
+      stops: ['Zamboanga City', 'Labuan', 'Dipolog'],
+      duration: '4 hours',
       frequency: 'Every 30 min',
       status: 'active',
     },
     {
       id: 4,
       routeNumber: 'Route 404',
-      name: 'Night Service',
-      origin: 'Central Station',
-      destination: 'Residential Area',
-      stops: ['Central Station', 'Hospital', 'Residential Area'],
-      duration: '30 min',
-      frequency: 'Every 45 min',
-      status: 'limited',
+      name: 'Jessa Mae',
+      origin: 'Zamboanga City',
+      destination: 'Cagayan',
+      stops: ['Zamboanga City', 'Labuan', 'Bungyawa', 'Cagayan'],
+      duration: '14 hours',
+      frequency: 'Every 30 min',
+      status: 'active',
+    },
+    {
+      id: 5,
+      routeNumber: 'Route 505',
+      name: 'Lizamae',
+      origin: 'Zamboanga City',
+      destination: 'Davao',
+      stops: ['Zamboanga City', 'Davao'],
+      duration: '6 hours',
+      frequency: 'Every 30 min',
+      status: 'active',
     },
   ];
 
@@ -62,7 +73,7 @@ export default function RoutesPage() {
         <Text variant="headlineMedium" style={styles.headerTitle}>
           Bus Routes
         </Text>
-        <Icon name="bus" size={28} color="#2196F3" />
+        <Icon name="bus" size={28} color="#1B5E20" />
       </View>
 
       <ScrollView

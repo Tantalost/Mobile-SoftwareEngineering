@@ -104,7 +104,7 @@ export default function LostFoundPage() {
         <Text variant="headlineMedium" style={styles.headerTitle}>
           Lost & Found
         </Text>
-        <Icon name="magnify" size={28} color="#2196F3" />
+        <Icon name="magnify" size={28} color="#1B5E20" />
       </View>
 
       <ScrollView
@@ -165,7 +165,7 @@ export default function LostFoundPage() {
             <Card.Content>
               <View style={styles.itemHeader}>
                 <View style={styles.itemIconContainer}>
-                  <Icon name={getCategoryIcon(item.category) as keyof typeof Icon.glyphMap} size={24} color="#2196F3" />
+                  <Icon name={getCategoryIcon(item.category) as keyof typeof Icon.glyphMap} size={24} color="#1B5E20" />
                 </View>
                 <View style={styles.itemInfo}>
                   <Text variant="titleMedium" style={styles.itemTitle}>
@@ -279,7 +279,7 @@ const styles = StyleSheet.create({
   },
   categoryChipSelected: {
     backgroundColor: '#1B5E20',
-    borderColor: '#2196F3',
+    borderColor: '#1B5E20',
   },
   categoryChipText: {
     color: '#666666',

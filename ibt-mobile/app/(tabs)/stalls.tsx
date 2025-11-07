@@ -74,7 +74,7 @@ export default function StallsPage() {
         <Text variant="headlineMedium" style={styles.headerTitle}>
           Stall Availability
         </Text>
-        <Icon name="storefront-outline" size={28} color="#2196F3" />
+        <Icon name="storefront-outline" size={28} color="#1B5E20" />
       </View>
 
       <ScrollView
