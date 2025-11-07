@@ -204,7 +204,7 @@ const styles = StyleSheet.create({
   },
   routeNumber: {
     fontWeight: '700',
-    color: '#2196F3',
+    color: '#1B5E20',
     marginBottom: 4,
   },
   routeName: {

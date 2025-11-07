@@ -110,7 +110,7 @@ export const Dashboard: React.FC = () => {
           </Text>
           <Avatar.Text
             size={40}
-            label="JD"
+            label="Rey"
             style={styles.avatar}
             labelStyle={styles.avatarLabel}
           />

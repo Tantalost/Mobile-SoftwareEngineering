@@ -208,7 +208,6 @@ export default function LostFoundPage() {
                 icon={() => <Icon name="email-outline" size={18} color="#FFFFFF" />}
                 style={styles.contactButton}
                 onPress={() => {
-                  // Handle contact action
                 }}
               >
                 Contact
@@ -279,7 +278,7 @@ const styles = StyleSheet.create({
     borderColor: '#E0E0E0',
   },
   categoryChipSelected: {
-    backgroundColor: '#2196F3',
+    backgroundColor: '#1B5E20',
     borderColor: '#2196F3',
   },
   categoryChipText: {
@@ -349,7 +348,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   detailText: {
-    color: '#666666',
+    color: '#1B5E20',
     fontSize: 12,
   },
   contactButton: {

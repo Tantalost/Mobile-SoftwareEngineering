@@ -201,7 +201,7 @@ export default function StallsPage() {
             {/* Instructions */}
             <View style={styles.instructionsContainer}>
               <View style={styles.instructionRow}>
-                <Icon name="information" size={18} color="#2196F3" />
+                <Icon name="information" size={18} color="#1B5E20" />
                 <Text variant="bodySmall" style={styles.instructionText}>
                   Green stalls are available for selection
                 </Text>
@@ -408,4 +408,3 @@ const styles = StyleSheet.create({
     color: '#666666',
   },
 });
-
