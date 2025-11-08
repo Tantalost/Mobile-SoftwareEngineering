@@ -17,7 +17,7 @@ export default function RoutesPage() {
       origin: 'Zamboanga City',
       destination: 'Ipil',
       stops: ['Zamboanga City', 'Ipil'],
-      duration: '5 hours',
+      duration: '3 hours',
       frequency: 'Every 15 min',
       status: 'active',
     },
@@ -28,7 +28,7 @@ export default function RoutesPage() {
       origin: 'Zamboanga City',
       destination: 'Pagadian',
       stops: ['Zamboanga City', 'Pagadian'],
-      duration: '10 hours',
+      duration: '7 hours',
       frequency: 'Every 20 min',
       status: 'active',
     },
@@ -227,13 +227,19 @@ const styles = StyleSheet.create({
   },
   activeChip: {
     backgroundColor: '#4CAF50',
+    borderRadius: 16,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    alignSelf: 'center',
+    paddingHorizontal: 8,
   },
   limitedChip: {
     backgroundColor: '#FF9800',
   },
   chipText: {
     color: '#FFFFFF',
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '600',
   },
   routeDetails: {

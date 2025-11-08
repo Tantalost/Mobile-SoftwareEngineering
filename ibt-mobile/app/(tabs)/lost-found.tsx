@@ -4,9 +4,6 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import { Button, Card, Chip, Searchbar, Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-/**
- * Lost and Found Page - Displays lost items
- */
 export default function LostFoundPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -112,7 +109,6 @@ export default function LostFoundPage() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Search Bar */}
         <Searchbar
           placeholder="Search items..."
           onChangeText={setSearchQuery}
@@ -121,7 +117,6 @@ export default function LostFoundPage() {
           iconColor="#666666"
         />
 
-        {/* Category Filter */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -165,7 +160,7 @@ export default function LostFoundPage() {
             <Card.Content>
               <View style={styles.itemHeader}>
                 <View style={styles.itemIconContainer}>
-                  <Icon name={getCategoryIcon(item.category) as keyof typeof Icon.glyphMap} size={24} color="#1B5E20" />
+                  <Icon name={getCategoryIcon(item.category) as keyof typeof Icon.glyphMap} size={24} color="#31694E" />
                 </View>
                 <View style={styles.itemInfo}>
                   <Text variant="titleMedium" style={styles.itemTitle}>
@@ -205,6 +200,7 @@ export default function LostFoundPage() {
 
               <Button
                 mode="contained"
+                buttonColor='#31694E'
                 icon={() => <Icon name="email-outline" size={18} color="#FFFFFF" />}
                 style={styles.contactButton}
                 onPress={() => {
@@ -307,7 +303,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 12,
-    backgroundColor: '#E3F2FD',
+    backgroundColor: '#F5F5F0',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -327,11 +323,17 @@ const styles = StyleSheet.create({
   statusChip: {
     height: 24,
     backgroundColor: '#4CAF50',
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    alignSelf: 'center',
+    paddingHorizontal: 5,
   },
   statusChipText: {
     color: '#FFFFFF',
-    fontSize: 10,
+    fontSize: 13,
     fontWeight: '600',
+    textAlign: 'center',
   },
   itemDescription: {
     color: '#666666',

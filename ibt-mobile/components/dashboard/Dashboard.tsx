@@ -57,28 +57,28 @@ export const Dashboard: React.FC = () => {
       id: 1,
       title: 'Black Leather Wallet',
       location: 'Main Building - Lobby',
-      date: '2024-01-15',
+      date: '2025-01-15',
       category: 'Wallet',
     },
     {
       id: 2,
       title: 'Blue Backpack',
       location: 'Library - 2nd Floor',
-      date: '2024-01-14',
+      date: '2025-01-14',
       category: 'Bag',
     },
     {
       id: 3,
       title: 'iPhone 13 Pro',
       location: 'Cafeteria',
-      date: '2024-01-13',
+      date: '2025-01-13',
       category: 'Electronics',
     },
     {
       id: 4,
       title: 'Keys with Keychain',
       location: 'Parking Lot B',
-      date: '2024-01-12',
+      date: '2025-01-12',
       category: 'Keys',
     },
   ];
@@ -183,7 +183,6 @@ export const Dashboard: React.FC = () => {
           </Card.Content>
         </Card>
 
-        {/* Current Bus Route Section */}
         <Card style={[styles.sectionCard, styles.tripCard]} mode="elevated" elevation={2}>
           <Card.Content>
             <Text variant="titleMedium" style={styles.sectionHeader}>
@@ -450,11 +449,18 @@ const styles = StyleSheet.create({
   },
   arrivalChip: {
     backgroundColor: '#CDECE1',
-    height: 28,
+    borderRadius: 16,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    alignSelf: 'center',
+    paddingHorizontal: 8,
   },
   arrivalChipText: {
     color: '#0F7842',
     fontWeight: '600',
+    fontSize: 13,
+    textAlign: 'center',
   },
   tripDivider: {
     height: 1,
@@ -531,7 +537,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 14,
-    backgroundColor: '#E0F2F1',
+    backgroundColor: '#E0F7EC',
     justifyContent: 'center',
     alignItems: 'center',
   },
