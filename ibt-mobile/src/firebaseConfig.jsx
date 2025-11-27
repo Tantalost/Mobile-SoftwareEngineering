@@ -1,11 +1,8 @@
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 
-import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
-import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
-
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_KEY,
+  apiKey: "AIzaSyDNsgKuYC29zCc_HNNT6AUVSMXmGPmMNCk",
   authDomain: "centralized-ibt-management.firebaseapp.com",
   projectId: "centralized-ibt-management",
   storageBucket: "centralized-ibt-management.firebasestorage.app",
@@ -14,10 +11,14 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
 
-const auth = initializeAuth(app, {
-  persistence: getReactNativePersistence(ReactNativeAsyncStorage)
-});
+export const db = getFirestore(app);
 
-export { db, auth };
+
+
+
+
+
+
+
+
