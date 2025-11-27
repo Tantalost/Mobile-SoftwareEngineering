@@ -474,7 +474,7 @@ const styles = StyleSheet.create({
   scrollView: { flex: 1 },
   scrollContent: { padding: 16 },
   floorCard: { marginBottom: 16, backgroundColor: '#FFFFFF' },
-  layoutCard: { maxHeight: 510, marginBottom: 10, backgroundColor: '#FFFFFF' },
+  layoutCard: {  marginBottom: 10, backgroundColor: '#FFFFFF' },
   infoCard: { marginTop: 8, backgroundColor: '#E8F5E9', borderColor: '#4CAF50', borderWidth: 1 },
   statusCard: { marginTop: 20, width: '100%', backgroundColor: 'white' },
   statusTitle: { marginTop: 20, fontWeight: 'bold',color: "#4c4b4bff"},
