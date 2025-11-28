@@ -321,7 +321,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
   statusChip: {
-    height: 24,
+    height: 35,
     backgroundColor: '#4CAF50',
     borderRadius: 16,
     justifyContent: 'center',
