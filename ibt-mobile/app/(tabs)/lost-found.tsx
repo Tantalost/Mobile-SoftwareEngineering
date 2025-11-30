@@ -1,226 +1,171 @@
 import Icon from '@expo/vector-icons/MaterialCommunityIcons';
-import React, { useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
-import { Button, Card, Chip, Searchbar, Text } from 'react-native-paper';
+import React, { useState, useEffect } from 'react';
+import { ScrollView, StyleSheet, View, ActivityIndicator, RefreshControl, StatusBar } from 'react-native';
+import { Card, Chip, Searchbar, Text, Surface } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import API_URL from '../../src/config';
+
+interface LostItem {
+  _id: string;
+  trackingNo: string;
+  description: string;
+  location: string;
+  dateTime: string;
+  status: 'Claimed' | 'Unclaimed' | 'Archived';
+  isArchived: boolean;
+}
 
 export default function LostFoundPage() {
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [lostItems, setLostItems] = useState<LostItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Dummy data for lost items
-  const lostItems = [
-    {
-      id: 1,
-      title: 'Black Leather Wallet',
-      description: 'Found near the main entrance. Contains ID and credit cards.',
-      location: 'Main Building - Lobby',
-      date: '2025-01-15',
-      category: 'wallet',
-      status: 'found',
-      contact: 'ibt@university.edu',
-    },
-    {
-      id: 2,
-      title: 'Blue Backpack',
-      description: 'Medium-sized blue backpack with laptop compartment.',
-      location: 'Library - 2nd Floor',
-      date: '2025-01-14',
-      category: 'bag',
-      status: 'found',
-      contact: 'ibt@university.edu',
-    },
-    {
-      id: 3,
-      title: 'iPhone 13 Pro',
-      description: 'Silver iPhone with black case. Lock screen shows family photo.',
-      location: 'Cafeteria',
-      date: '2025-01-13',
-      category: 'electronics',
-      status: 'found',
-      contact: 'ibt@university.edu',
-    },
-    {
-      id: 4,
-      title: 'Red Water Bottle',
-      description: 'Stainless steel water bottle with university logo.',
-      location: 'Gym - Locker Room',
-      date: '2025-01-12',
-      category: 'personal',
-      status: 'found',
-      contact: 'ibt@university.edu',
-    },
-    {
-      id: 5,
-      title: 'Keys with Keychain',
-      description: 'Set of keys with a small teddy bear keychain.',
-      location: 'Parking Lot B',
-      date: '2025-01-11',
-      category: 'keys',
-      status: 'found',
-      contact: 'ibt@university.edu',
-    },
-    {
-      id: 6,
-      title: 'Glasses Case',
-      description: 'Brown leather glasses case with prescription glasses inside.',
-      location: 'Student Center',
-      date: '2025-01-10',
-      category: 'personal',
-      status: 'found',
-      contact: 'ibt@university.edu',
-    },
-  ];
+  useEffect(() => {
+    fetchItems();
+  }, []);
 
-  const categories = [
-    { id: 'all', label: 'All', icon: 'view-grid' },
-    { id: 'wallet', label: 'Wallet', icon: 'wallet' },
-    { id: 'bag', label: 'Bag', icon: 'bag-personal' },
-    { id: 'electronics', label: 'Electronics', icon: 'cellphone' },
-    { id: 'keys', label: 'Keys', icon: 'key' },
-    { id: 'personal', label: 'Personal', icon: 'account' },
-  ];
-
-  const getCategoryIcon = (category: string) => {
-    const cat = categories.find((c) => c.id === category);
-    return cat?.icon || 'help-circle';
+  const fetchItems = async () => {
+    try {
+      const response = await fetch(`${API_URL}/lost-found`);
+      const text = await response.text();
+      try {
+        const data = JSON.parse(text);
+        setLostItems(data);
+      } catch (e) {
+        console.error("Parse error", e);
+      }
+    } catch (error) {
+      console.error("Fetch error:", error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   };
 
+  const onRefresh = React.useCallback(() => {
+    setRefreshing(true);
+    fetchItems();
+  }, []);
+
   const filteredItems = lostItems.filter((item) => {
-    const matchesSearch =
-      item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.description.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = selectedCategory === 'all' || item.category === selectedCategory;
-    return matchesSearch && matchesCategory;
+    const searchLower = searchQuery.toLowerCase();
+    return (
+      item.trackingNo.toLowerCase().includes(searchLower) ||
+      item.description.toLowerCase().includes(searchLower) ||
+      item.location.toLowerCase().includes(searchLower)
+    );
   });
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'Unclaimed': return { bg: '#FFF3E0', text: '#E65100', border: '#FFCC80' }; // Orange
+      case 'Claimed': return { bg: '#E8F5E9', text: '#2E7D32', border: '#A5D6A7' }; // Green
+      default: return { bg: '#ECEFF1', text: '#546E7A', border: '#CFD8DC' }; // Grey
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#1B5E20" />
+        <Text variant="bodyMedium" style={{ marginTop: 16, color: '#666' }}>Updating records...</Text>
+      </View>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text variant="headlineMedium" style={styles.headerTitle}>
-          Lost & Found
-        </Text>
-        <Icon name="magnify" size={28} color="#1B5E20" />
-      </View>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      
+      {/* Modern Header */}
+      <Surface style={styles.header} elevation={0}>
+        <View>
+          <Text variant="headlineMedium" style={styles.headerTitle}>Lost & Found</Text>
+          <Text variant="bodyMedium" style={styles.headerSubtitle}>Monitor reported items</Text>
+        </View>
+        <View style={styles.headerIconBg}>
+           <Icon name="archive-search-outline" size={24} color="#1B5E20" />
+        </View>
+      </Surface>
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
+      <View style={styles.searchContainer}>
         <Searchbar
           placeholder="Search items..."
           onChangeText={setSearchQuery}
           value={searchQuery}
           style={styles.searchbar}
-          iconColor="#666666"
+          inputStyle={styles.searchInput}
+          iconColor="#666"
         />
+      </View>
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.categoryContainer}
-          contentContainerStyle={styles.categoryContent}
-        >
-          {categories.map((category) => (
-            <Chip
-              key={category.id}
-              selected={selectedCategory === category.id}
-              onPress={() => setSelectedCategory(category.id)}
-              icon={() => (
-                <Icon
-                  name={category.icon as keyof typeof Icon.glyphMap}
-                  size={18}
-                  color={selectedCategory === category.id ? '#FFFFFF' : '#666666'}
-                />
-              )}
-              style={[
-                styles.categoryChip,
-                selectedCategory === category.id && styles.categoryChipSelected,
-              ]}
-              textStyle={[
-                styles.categoryChipText,
-                selectedCategory === category.id && styles.categoryChipTextSelected,
-              ]}
-            >
-              {category.label}
-            </Chip>
-          ))}
-        </ScrollView>
-
-        {/* Results Count */}
-        <Text variant="bodySmall" style={styles.resultsText}>
-          {filteredItems.length} item{filteredItems.length !== 1 ? 's' : ''} found
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#1B5E20']} />
+        }
+      >
+        <Text variant="labelMedium" style={styles.resultsText}>
+          FOUND {filteredItems.length} RECORD{filteredItems.length !== 1 ? 'S' : ''}
         </Text>
 
-        {/* Lost Items List */}
-        {filteredItems.map((item) => (
-          <Card key={item.id} style={styles.itemCard} mode="elevated" elevation={2}>
-            <Card.Content>
-              <View style={styles.itemHeader}>
-                <View style={styles.itemIconContainer}>
-                  <Icon name={getCategoryIcon(item.category) as keyof typeof Icon.glyphMap} size={24} color="#31694E" />
+        {filteredItems.map((item) => {
+          const statusStyle = getStatusColor(item.status);
+          const dateObj = new Date(item.dateTime);
+          
+          return (
+            <Card key={item._id} style={styles.card} mode="elevated">
+              <View style={styles.cardContent}>
+                
+                {/* Header Row: Tracking & Status */}
+                <View style={styles.cardHeaderRow}>
+                  <View style={styles.trackingContainer}>
+                    <Icon name="barcode" size={16} color="#555" style={{marginRight: 4}} />
+                    <Text variant="titleSmall" style={styles.trackingText}>#{item.trackingNo}</Text>
+                  </View>
+                  <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg, borderColor: statusStyle.border }]}>
+                    <Text style={[styles.statusText, { color: statusStyle.text }]}>{item.status.toUpperCase()}</Text>
+                  </View>
                 </View>
-                <View style={styles.itemInfo}>
-                  <Text variant="titleMedium" style={styles.itemTitle}>
-                    {item.title}
-                  </Text>
-                  <Text variant="bodySmall" style={styles.itemDate}>
-                    Found on {new Date(item.date).toLocaleDateString()}
-                  </Text>
+
+                {/* Date Row */}
+                <View style={styles.dateRow}>
+                   <Icon name="calendar-clock" size={14} color="#888" />
+                   <Text variant="bodySmall" style={styles.dateText}>
+                      {dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} • {dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                   </Text>
                 </View>
-                <Chip
-                  icon={() => <Icon name="check-circle" size={14} color="#FFFFFF" />}
-                  style={styles.statusChip}
-                  textStyle={styles.statusChipText}
-                >
-                  Found
-                </Chip>
+
+                {/* Divider */}
+                <View style={styles.divider} />
+
+                {/* Description */}
+                <Text variant="bodyMedium" style={styles.description} numberOfLines={2}>
+                  {item.description}
+                </Text>
+
+                {/* Location Footer */}
+                <View style={styles.locationContainer}>
+                  <View style={styles.locationIconBg}>
+                    <Icon name="map-marker-radius" size={16} color="#1B5E20" />
+                  </View>
+                  <Text variant="bodySmall" style={styles.locationText}>{item.location}</Text>
+                </View>
+
               </View>
-
-              <Text variant="bodyMedium" style={styles.itemDescription}>
-                {item.description}
-              </Text>
-
-              <View style={styles.itemDetails}>
-                <View style={styles.detailRow}>
-                  <Icon name="map-marker" size={16} color="#666666" />
-                  <Text variant="bodySmall" style={styles.detailText}>
-                    {item.location}
-                  </Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Icon name="email" size={16} color="#666666" />
-                  <Text variant="bodySmall" style={styles.detailText}>
-                    {item.contact}
-                  </Text>
-                </View>
-              </View>
-
-              <Button
-                mode="contained"
-                buttonColor='#31694E'
-                icon={() => <Icon name="email-outline" size={18} color="#FFFFFF" />}
-                style={styles.contactButton}
-                onPress={() => {
-                }}
-              >
-                Contact
-              </Button>
-            </Card.Content>
-          </Card>
-        ))}
+            </Card>
+          );
+        })}
 
         {filteredItems.length === 0 && (
           <View style={styles.emptyContainer}>
-            <Icon name="magnify" size={64} color="#CCCCCC" />
-            <Text variant="titleMedium" style={styles.emptyText}>
-              No items found
-            </Text>
-            <Text variant="bodyMedium" style={styles.emptySubtext}>
-              Try adjusting your search or filter
-            </Text>
+            <View style={styles.emptyIconBg}>
+                <Icon name="magnify-remove-outline" size={48} color="#9E9E9E" />
+            </View>
+            <Text variant="titleMedium" style={styles.emptyTitle}>No Records Found</Text>
+            <Text variant="bodyMedium" style={styles.emptySub}>Try adjusting your search criteria</Text>
           </View>
         )}
       </ScrollView>
@@ -229,146 +174,176 @@ export default function LostFoundPage() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F5F5F5',
+  container: { 
+    flex: 1, 
+    backgroundColor: '#F7F9FC' // Slightly cooler grey for modern feel
   },
+  loadingContainer: { 
+    flex: 1, 
+    justifyContent: 'center', 
+    alignItems: 'center',
+    backgroundColor: '#F7F9FC'
+  },
+  
+  // Header Styles
   header: {
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 20,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
+    borderBottomColor: '#F0F0F0',
   },
-  headerTitle: {
-    fontWeight: '700',
+  headerTitle: { 
+    fontWeight: '800', 
     color: '#1A1A1A',
+    letterSpacing: -0.5 
   },
-  scrollView: {
-    flex: 1,
+  headerSubtitle: { 
+    color: '#666666', 
+    marginTop: 2 
   },
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 32,
+  headerIconBg: {
+    backgroundColor: '#E8F5E9',
+    padding: 10,
+    borderRadius: 12,
+  },
+
+  // Search Styles
+  searchContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    backgroundColor: '#F7F9FC',
   },
   searchbar: {
-    marginBottom: 16,
     borderRadius: 12,
-    elevation: 0,
     backgroundColor: '#FFFFFF',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    height: 48,
   },
-  categoryContainer: {
-    marginBottom: 16,
+  searchInput: {
+    minHeight: 0, // Fix for React Native Paper vertical alignment
   },
-  categoryContent: {
-    gap: 8,
-    paddingRight: 16,
+  
+  // List Styles
+  scrollContent: { 
+    paddingHorizontal: 16, 
+    paddingBottom: 32 
   },
-  categoryChip: {
-    marginRight: 8,
+  resultsText: { 
+    color: '#888', 
+    marginBottom: 12, 
+    marginLeft: 4, 
+    fontWeight: '600',
+    letterSpacing: 0.5
+  },
+  
+  // Card Styles
+  card: {
+    marginBottom: 14,
     backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+  },
+  cardContent: {
+    padding: 16,
+  },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  trackingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  trackingText: {
+    fontWeight: '700',
+    color: '#333',
+  },
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
   },
-  categoryChipSelected: {
-    backgroundColor: '#1B5E20',
-    borderColor: '#1B5E20',
+  statusText: {
+    fontSize: 10,
+    fontWeight: '700',
   },
-  categoryChipText: {
-    color: '#666666',
+  dateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    paddingLeft: 2,
+  },
+  dateText: {
+    color: '#888',
+    marginLeft: 6,
     fontSize: 12,
   },
-  categoryChipTextSelected: {
-    color: '#FFFFFF',
-  },
-  resultsText: {
-    color: '#666666',
-    marginBottom: 16,
-    paddingHorizontal: 4,
-  },
-  itemCard: {
-    marginBottom: 16,
-    borderRadius: 16,
-    backgroundColor: '#FFFFFF',
-  },
-  itemHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+  divider: {
+    height: 1,
+    backgroundColor: '#F0F0F0',
     marginBottom: 12,
   },
-  itemIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: '#F5F5F0',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
+  description: {
+    color: '#444',
+    lineHeight: 22,
+    marginBottom: 16,
+    fontSize: 15,
   },
-  itemInfo: {
+  locationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F8E9', // Very light green bg
+    padding: 10,
+    borderRadius: 10,
+  },
+  locationIconBg: {
+    marginRight: 10,
+  },
+  locationText: {
+    color: '#2E7D32', // Darker green text
+    fontWeight: '600',
     flex: 1,
   },
-  itemTitle: {
-    fontWeight: '600',
-    color: '#1A1A1A',
-    marginBottom: 4,
+
+  // Empty State Styles
+  emptyContainer: { 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    marginTop: 60,
+    opacity: 0.8
   },
-  itemDate: {
-    color: '#999999',
-    fontSize: 11,
+  emptyIconBg: {
+    backgroundColor: '#ECEFF1',
+    padding: 20,
+    borderRadius: 50,
+    marginBottom: 16,
   },
-  statusChip: {
-    height: 35,
-    backgroundColor: '#4CAF50',
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    alignSelf: 'center',
-    paddingHorizontal: 5,
+  emptyTitle: { 
+    color: '#333', 
+    fontWeight: '700',
+    marginBottom: 4
   },
-  statusChipText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  itemDescription: {
-    color: '#666666',
-    marginBottom: 12,
-    lineHeight: 20,
-  },
-  itemDetails: {
-    marginBottom: 12,
-    gap: 6,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  detailText: {
-    color: '#1B5E20',
-    fontSize: 12,
-  },
-  contactButton: {
-    marginTop: 8,
-    borderRadius: 8,
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 64,
-  },
-  emptyText: {
-    color: '#666666',
-    marginTop: 16,
-    fontWeight: '600',
-  },
-  emptySubtext: {
-    color: '#999999',
-    marginTop: 8,
+  emptySub: {
+    color: '#999',
   },
 });
