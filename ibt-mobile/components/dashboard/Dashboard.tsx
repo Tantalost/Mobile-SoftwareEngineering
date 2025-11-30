@@ -1,105 +1,104 @@
 import Icon from '@expo/vector-icons/MaterialCommunityIcons';
-import { Link } from 'expo-router';
-import React, { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import { Link, useRouter } from 'expo-router';
+import React, { useMemo, useState, useEffect } from 'react';
+import { ScrollView, StyleSheet, TextInput, TouchableOpacity, View, ActivityIndicator } from 'react-native';
 import { Avatar, Card, Chip, Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import API_URL from '../../src/config'; // Adjust path if needed based on your folder structure
+
+// --- Interfaces matching your Backend ---
+interface BusTrip {
+  _id: string;
+  templateNo: string;
+  route: string;         // e.g. "Zamboanga - Ipil"
+  time: string;          // e.g. "08:00 AM"
+  date: string;          // ISO Date
+  company: string;       // e.g. "Ceres"
+  status: string;
+}
+
+interface LostItem {
+  _id: string;
+  title?: string;        // Your backend might return 'description' or 'trackingNo' based on schema
+  description: string;
+  location: string;
+  dateTime: string;
+  status: string;
+  trackingNo: string;
+}
 
 export const Dashboard: React.FC = () => {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const locationLabel = 'Normal Road, Baliwasan, Z.C';
+  
+  // State for Real Data
+  const [busTrips, setBusTrips] = useState<BusTrip[]>([]);
+  const [lostItems, setLostItems] = useState<LostItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Dummy data for bus routes available today
-  const routes = [
-    {
-      id: 1,
-      routeNumber: 'Route 101',
-      name: 'Ceres',
-      origin: 'Zamboanga City',
-      destination: 'Ipil',
-      nextDeparture: '08:15 AM',
-      status: 'On time',
-    },
-    {
-      id: 2,
-      routeNumber: 'Route 202',
-      name: 'Balmond',
-      origin: 'Zamboanga City',
-      destination: 'Pagadian',
-      nextDeparture: '10:30 AM',
-      status: 'Boarding',
-    },
-    {
-      id: 3,
-      routeNumber: 'Route 303',
-      name: 'Dindo',
-      origin: 'Zamboanga City',
-      destination: 'Dipolog',
-      nextDeparture: '09:45 AM',
-      status: 'Delayed',
-    },
-    {
-      id: 4,
-      routeNumber: 'Route 404',
-      name: 'Yoyoy',
-      origin: 'Zamboanga City',
-      destination: 'Labuan',
-      nextDeparture: '09:00 PM',
-      status: 'Scheduled',
-    },
-  ];
+  // Fetch Data on Mount
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // Fetch Bus Routes and Lost Items in parallel
+        const [routesRes, lostRes] = await Promise.all([
+          fetch(`${API_URL}/bus-routes`),
+          fetch(`${API_URL}/lost-found`)
+        ]);
 
-  const currentRoute = routes[0];
+        const routesData = await routesRes.json();
+        const lostData = await lostRes.json();
 
-  // Dummy data for latest lost and found items
-  const lostItems = [
-    {
-      id: 1,
-      title: 'Black Leather Wallet',
-      location: 'Main Building - Lobby',
-      date: '2025-01-15',
-      category: 'Wallet',
-    },
-    {
-      id: 2,
-      title: 'Blue Backpack',
-      location: 'Library - 2nd Floor',
-      date: '2025-01-14',
-      category: 'Bag',
-    },
-    {
-      id: 3,
-      title: 'iPhone 13 Pro',
-      location: 'Cafeteria',
-      date: '2025-01-13',
-      category: 'Electronics',
-    },
-    {
-      id: 4,
-      title: 'Keys with Keychain',
-      location: 'Parking Lot B',
-      date: '2025-01-12',
-      category: 'Keys',
-    },
-  ];
+        setBusTrips(routesData);
+        setLostItems(lostData);
+      } catch (error) {
+        console.error("Dashboard fetch error:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
 
+    fetchData();
+  }, []);
+
+  // Filter Bus Routes for Search
   const filteredRoutes = useMemo(() => {
+    // If no search, show upcoming 3 trips
     if (!searchQuery.trim()) {
-      return routes.slice(0, 3);
+      return busTrips.slice(0, 3);
     }
 
     const query = searchQuery.toLowerCase();
-
-    return routes
-      .filter((route) =>
-        [route.routeNumber, route.name, route.origin, route.destination].some((value) =>
-          value.toLowerCase().includes(query)
-        )
+    return busTrips
+      .filter((trip) =>
+        trip.route.toLowerCase().includes(query) ||
+        trip.company.toLowerCase().includes(query) ||
+        trip.templateNo.toLowerCase().includes(query)
       )
       .slice(0, 4);
-  }, [routes, searchQuery]);
+  }, [busTrips, searchQuery]);
 
+  // Get Latest 3 Lost Items
   const latestLostItems = lostItems.slice(0, 3);
+
+  // Calculate "Next Trip" (Current Trip)
+  // Logic: Find the first trip that hasn't happened yet (or is active today)
+  const currentTrip = useMemo(() => {
+    if (busTrips.length === 0) return null;
+    
+    // Simple logic: Just pick the first one from the sorted list (Backend sorts by Date/Time)
+    // Or you could add logic to compare with new Date() here.
+    return busTrips[0]; 
+  }, [busTrips]);
+
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <ActivityIndicator size="large" color="#1B5E20" />
+      </View>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -110,7 +109,7 @@ export const Dashboard: React.FC = () => {
           </Text>
           <Avatar.Text
             size={40}
-            label="Rey"
+            label="AD"
             style={styles.avatar}
             labelStyle={styles.avatarLabel}
           />
@@ -122,6 +121,7 @@ export const Dashboard: React.FC = () => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        {/* --- SEARCH / WHERE TO SECTION --- */}
         <Card style={[styles.sectionCard, styles.whereCard]} mode="elevated" elevation={3}>
           <Card.Content style={styles.whereContent}>
             <Text variant="titleLarge" style={styles.whereTitle}>
@@ -143,7 +143,7 @@ export const Dashboard: React.FC = () => {
                 style={styles.searchInput}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
-                placeholder="Search for a route or stop..."
+                placeholder="Search destination or company..."
                 placeholderTextColor="#9AA5B1"
               />
               {!!searchQuery && (
@@ -157,19 +157,20 @@ export const Dashboard: React.FC = () => {
               )}
             </View>
 
+            {/* Suggestions List */}
             {filteredRoutes.length > 0 ? (
               <View style={styles.suggestionList}>
                 {filteredRoutes.map((route) => (
-                  <View key={route.id} style={styles.suggestionItem}>
+                  <View key={route._id} style={styles.suggestionItem}>
                     <View style={styles.suggestionIcon}>
                       <Icon name="bus" size={16} color="#1B5E20" />
                     </View>
                     <View style={styles.suggestionTextWrapper}>
                       <Text variant="bodyMedium" style={styles.suggestionTitle}>
-                        {route.routeNumber} · {route.name}
+                        {route.company} · {route.time}
                       </Text>
                       <Text variant="bodySmall" style={styles.suggestionSubtitle}>
-                        {route.origin} → {route.destination}
+                        {route.route}
                       </Text>
                     </View>
                   </View>
@@ -183,66 +184,70 @@ export const Dashboard: React.FC = () => {
           </Card.Content>
         </Card>
 
-        <Card style={[styles.sectionCard, styles.tripCard]} mode="elevated" elevation={2}>
-          <Card.Content>
-            <Text variant="titleMedium" style={styles.sectionHeader}>
-              Current Trip
-            </Text>
-            <View style={styles.tripHeader}>
-              <View style={styles.tripBadge}>
-                <Icon name="bus" size={20} color="#1B5E20" />
-              </View>
-              <View style={styles.tripDetails}>
-                <Text variant="bodySmall" style={styles.tripRouteId}>
-                  {currentRoute.routeNumber}
-                </Text>
-                <Text variant="titleMedium" style={styles.tripRouteName}>
-                  {currentRoute.name}
-                </Text>
-              </View>
-              <Chip style={styles.arrivalChip} textStyle={styles.arrivalChipText}>
-                5 min
-              </Chip>
-            </View>
-
-            <View style={styles.tripDivider} />
-
-            <View style={styles.tripStops}>
-              <View style={styles.timelineColumn}>
-                <View style={styles.timelineDotActive} />
-                <View style={styles.timelineLine} />
-                <View style={styles.timelineDot} />
-              </View>
-              <View style={styles.stopDetails}>
-                <View style={styles.stopRow}>
-                  <Text variant="titleSmall" style={styles.stopName}>
-                    {currentRoute.origin}
+        {/* --- CURRENT / NEXT TRIP SECTION --- */}
+        {currentTrip && (
+          <Card style={[styles.sectionCard, styles.tripCard]} mode="elevated" elevation={2}>
+            <Card.Content>
+              <Text variant="titleMedium" style={styles.sectionHeader}>
+                Next Departure
+              </Text>
+              <View style={styles.tripHeader}>
+                <View style={styles.tripBadge}>
+                  <Icon name="bus-clock" size={20} color="#1B5E20" />
+                </View>
+                <View style={styles.tripDetails}>
+                  <Text variant="bodySmall" style={styles.tripRouteId}>
+                    {currentTrip.templateNo}
                   </Text>
-                  <Text variant="bodySmall" style={styles.stopMeta}>
-                    {currentRoute.nextDeparture}
+                  <Text variant="titleMedium" style={styles.tripRouteName}>
+                    {currentTrip.company}
                   </Text>
                 </View>
-                <View style={styles.stopRow}>
-                  <Text variant="titleSmall" style={styles.stopNameInactive}>
-                    {currentRoute.destination}
-                  </Text>
-                  <Text variant="bodySmall" style={styles.stopMeta}>
-                    Est. 10:37 AM
-                  </Text>
+                <Chip style={styles.arrivalChip} textStyle={styles.arrivalChipText}>
+                  {currentTrip.status || 'Active'}
+                </Chip>
+              </View>
+
+              <View style={styles.tripDivider} />
+
+              <View style={styles.tripStops}>
+                <View style={styles.timelineColumn}>
+                  <View style={styles.timelineDotActive} />
+                  <View style={styles.timelineLine} />
+                  <View style={styles.timelineDot} />
+                </View>
+                <View style={styles.stopDetails}>
+                  <View style={styles.stopRow}>
+                    <Text variant="titleSmall" style={styles.stopName}>
+                      Zamboanga City (IBT)
+                    </Text>
+                    <Text variant="bodySmall" style={styles.stopMeta}>
+                      {currentTrip.time}
+                    </Text>
+                  </View>
+                  <View style={styles.stopRow}>
+                    <Text variant="titleSmall" style={styles.stopNameInactive}>
+                      {/* Extract destination from route string if possible, or just show route */}
+                      {currentTrip.route.replace('Zamboanga - ', '')}
+                    </Text>
+                    <Text variant="bodySmall" style={styles.stopMeta}>
+                      {new Date(currentTrip.date).toLocaleDateString()}
+                    </Text>
+                  </View>
                 </View>
               </View>
-            </View>
-          </Card.Content>
-        </Card>
+            </Card.Content>
+          </Card>
+        )}
 
-        {/* Lost & Found Snapshot */}
+        {/* --- LOST & FOUND SECTION --- */}
         <Card style={[styles.sectionCard, styles.lostCard]} mode="elevated" elevation={2}>
           <Card.Content>
             <View style={styles.cardHeader}>
               <Text variant="titleMedium" style={styles.sectionHeader}>
-                Lost & Found
+                Recent Lost Items
               </Text>
-              <Link href="/lost-found" asChild>
+              <Link href="/(tabs)/lost-found" asChild>
                 <TouchableOpacity>
                   <Text variant="bodySmall" style={styles.seeAllText}>
                     See all
@@ -252,25 +257,27 @@ export const Dashboard: React.FC = () => {
             </View>
 
             <View style={styles.lostItemsList}>
-              {latestLostItems.map((item, index) => (
-                <View key={item.id} style={styles.lostItemRow}>
-                  <View style={styles.lostItemIconWrapper}>
-                    <Icon name="briefcase-outline" size={18} color="#1B5E20" />
+              {latestLostItems.length === 0 ? (
+                 <Text style={{color: '#999', fontStyle:'italic'}}>No recent lost items reported.</Text>
+              ) : (
+                latestLostItems.map((item, index) => (
+                  <View key={item._id} style={styles.lostItemRow}>
+                    <View style={styles.lostItemIconWrapper}>
+                      <Icon name="briefcase-search-outline" size={18} color="#1B5E20" />
+                    </View>
+                    <View style={styles.lostItemContent}>
+                      <Text variant="bodyMedium" style={styles.lostItemTitle}>
+                        {/* Use tracking number as title, or description if short */}
+                        {item.description.length > 25 ? item.description.substring(0, 25) + "..." : item.description}
+                      </Text>
+                      <Text variant="bodySmall" style={styles.lostItemMeta}>
+                         #{item.trackingNo} • {item.location}
+                      </Text>
+                    </View>
+                    {index < latestLostItems.length - 1 && <View style={styles.lostItemDivider} />}
                   </View>
-                  <View style={styles.lostItemContent}>
-                    <Text variant="bodyMedium" style={styles.lostItemTitle}>
-                      {item.title}
-                    </Text>
-                    <Text variant="bodySmall" style={styles.lostItemMeta}>
-                      {item.location}, {new Date(item.date).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                      })}
-                    </Text>
-                  </View>
-                  {index < latestLostItems.length - 1 && <View style={styles.lostItemDivider} />}
-                </View>
-              ))}
+                ))
+              )}
             </View>
           </Card.Content>
         </Card>
@@ -283,6 +290,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F5F5F5',
+  },
+  centerContent: {
+    justifyContent: 'center',
+    alignItems: 'center'
   },
   header: {
     backgroundColor: '#FFFFFF',
@@ -301,7 +312,7 @@ const styles = StyleSheet.create({
     color: '#1A1A1A',
   },
   avatar: {
-    backgroundColor: '#2196F3',
+    backgroundColor: '#1B5E20',
   },
   avatarLabel: {
     color: '#FFFFFF',
