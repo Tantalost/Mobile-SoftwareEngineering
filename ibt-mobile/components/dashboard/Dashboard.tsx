@@ -30,7 +30,6 @@ interface LostItem {
 export const Dashboard: React.FC = () => {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
-  const locationLabel = 'Normal Road, Baliwasan, Z.C';
   
   // State for Real Data
   const [busTrips, setBusTrips] = useState<BusTrip[]>([]);
@@ -127,15 +126,6 @@ export const Dashboard: React.FC = () => {
             <Text variant="titleLarge" style={styles.whereTitle}>
               Where to?
             </Text>
-
-            <View style={styles.locationRow}>
-              <View style={styles.locationIconWrapper}>
-                <Icon name="map-marker" size={18} color="#1B5E20" />
-              </View>
-              <Text variant="bodyMedium" style={styles.locationText}>
-                {locationLabel}
-              </Text>
-            </View>
 
             <View style={styles.searchInputContainer}>
               <Icon name="magnify" size={20} color="#6C7B8A" />
