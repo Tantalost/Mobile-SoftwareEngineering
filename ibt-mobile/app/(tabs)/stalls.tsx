@@ -1,26 +1,16 @@
 import Icon from '@expo/vector-icons/MaterialCommunityIcons';
 import React, { useState, useEffect, useMemo } from 'react';
-import { Alert, ScrollView, StyleSheet, TouchableOpacity, View, Platform } from 'react-native';
+import { Alert, ScrollView, StyleSheet, TouchableOpacity, View, Platform, RefreshControl } from 'react-native';
 import { Card, SegmentedButtons, Text, Button, ActivityIndicator, Modal, Portal, TextInput, RadioButton } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImageManipulator from 'expo-image-manipulator'; 
-
-import { db } from "../../src/firebaseConfig"; 
-import { getAuth, signInAnonymously } from "firebase/auth"; 
-import { collection, query, where, onSnapshot, setDoc, doc, updateDoc } from 'firebase/firestore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import API_URL from '../../src/config';
 
 const BILLING_CONFIG = {
-  Permanent: {
-    amountLabel: "₱ 6,000.00",
-    periodLabel: "30 DAYS",
-    rawAmount: 6000
-  },
-  NightMarket: { 
-    amountLabel: "₱ 1,120.00",
-    periodLabel: "7 DAYS",
-    rawAmount: 1120
-  }
+  Permanent: { amountLabel: "₱ 6,000.00", periodLabel: "30 DAYS", rawAmount: 6000 },
+  NightMarket: { amountLabel: "₱ 1,120.00", periodLabel: "7 DAYS", rawAmount: 1120 }
 };
 
 const PAYMENT_INFO = {
@@ -33,7 +23,7 @@ const PAYMENT_INFO = {
 type FileState = {
   permit: DocumentPicker.DocumentPickerAsset | null;
   validId: DocumentPicker.DocumentPickerAsset | null;
-  clearance: DocumentPicker.DocumentPickerAsset | null; // Added Clearance
+  clearance: DocumentPicker.DocumentPickerAsset | null;
   receipt: DocumentPicker.DocumentPickerAsset | null;
 };
 
@@ -48,7 +38,7 @@ type ApplicationData = {
 } | null;
 
 export default function StallsPage() {
-  const [user, setUser] = useState<any>(null);
+  const [deviceId, setDeviceId] = useState<string | null>(null);
   
   const [selectedFloor, setSelectedFloor] = useState('Permanent');
   const [selectedStall, setSelectedStall] = useState<string | null>(null);
@@ -73,71 +63,54 @@ export default function StallsPage() {
   });
 
   const [files, setFiles] = useState<FileState>({
-    permit: null,
-    validId: null,
-    clearance: null, 
-    receipt: null
+    permit: null, validId: null, clearance: null, receipt: null
   });
 
   const currentBilling = useMemo(() => {
-    
     const floorType = myApplication ? myApplication.floor : selectedFloor;
-    
-    if (floorType === 'Night Market') {
-        return BILLING_CONFIG.NightMarket;
-    }
-    return BILLING_CONFIG.Permanent;
+    return floorType === 'Night Market' ? BILLING_CONFIG.NightMarket : BILLING_CONFIG.Permanent;
   }, [selectedFloor, myApplication]);
 
+  // 1. Initialize User Identity (Device ID)
   useEffect(() => {
-    const auth = getAuth();
-    const unsubscribe = auth.onAuthStateChanged((currUser) => {
-        setUser(currUser);
-        if (currUser) {
-            const appRef = doc(db, "waitlist", currUser.uid);
-            const unsubApp = onSnapshot(appRef, (docSnap) => {
-                if (docSnap.exists()) {
-                    setMyApplication(docSnap.data() as ApplicationData);
-                } else {
-                    setMyApplication(null);
-                }
-            });
-            return () => unsubApp();
-        } else {
-            signInAnonymously(auth).catch(e => console.error(e));
-        }
-    });
-    return () => unsubscribe();
+    const initUser = async () => {
+      let id = await AsyncStorage.getItem('device_id');
+      if (!id) {
+        id = Math.random().toString(36).substring(7) + Date.now().toString();
+        await AsyncStorage.setItem('device_id', id);
+      }
+      setDeviceId(id);
+    };
+    initUser();
   }, []);
 
+  // 2. Poll for Data (Stalls & My Application)
   useEffect(() => {
-    setLoading(true);
-    const q = query(
-      collection(db, "stalls"),
-      where("floor", "==", selectedFloor),
-      where("status", "==", "Paid")
-    );
+    if (!deviceId) return;
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const liveStalls: string[] = [];
-      snapshot.docs.forEach(doc => {
-        const data = doc.data();
-        const slot = data.slotNo || data.slotno || data.slotLabel;
-        if (slot) liveStalls.push(slot);
-      });
-      setOccupiedStalls(liveStalls);
-      setLoading(false);
-      
-      if (selectedStall && liveStalls.includes(selectedStall)) {
-        setSelectedStall(null);
-      }
-    }, (error) => {
-      console.error("Error fetching stalls:", error);
-      setLoading(false);
-    });
+    fetchData(); // Initial Fetch
+    const interval = setInterval(fetchData, 10000); // Poll every 10s
+    return () => clearInterval(interval);
+  }, [deviceId, selectedFloor]);
 
-    return () => unsubscribe();
-  }, [selectedFloor, selectedStall]);
+  const fetchData = async () => {
+    if (!deviceId) return;
+    try {
+      // A. Get Occupied Stalls
+      const stallsRes = await fetch(`${API_URL}/stalls/occupied?floor=${selectedFloor}`);
+      const stallsData = await stallsRes.json();
+      setOccupiedStalls(stallsData);
+
+      // B. Get My Application
+      const myAppRes = await fetch(`${API_URL}/stalls/my-application/${deviceId}`);
+      const myAppData = await myAppRes.json();
+      setMyApplication(myAppData);
+
+      setLoading(false);
+    } catch (error) {
+      console.error("Fetch error:", error);
+    }
+  };
 
   const pickFile = async (fileType: keyof FileState) => {
     try {
@@ -169,13 +142,11 @@ export default function StallsPage() {
   };
 
   const submitApplication = async () => {
-    if (!user) { Alert.alert("Wait", "Initializing connection..."); return; }
-
+    if (!deviceId) return;
     if(!formData.fullName || !formData.contact || !selectedStall) {
       Alert.alert("Incomplete", "Please fill in all text fields.");
       return;
     }
-
    if (!files.permit || !files.validId || !files.clearance) {
       Alert.alert("Missing Photos", "Please upload Permit, Valid ID, and Barangay Clearance.");
       return;
@@ -184,46 +155,52 @@ export default function StallsPage() {
     setApplying(true);
 
     try {
+      // 1. Convert Images
       const permitBase64 = await convertImageToText(files.permit.uri);
       const idBase64 = await convertImageToText(files.validId.uri);
       const clearanceBase64 = await convertImageToText(files.clearance.uri);
 
-      await setDoc(doc(db, "waitlist", user.uid), {
-        uid: user.uid,
+      // 2. Prepare Payload
+      const payload = {
+        deviceId,
         name: formData.fullName,
         contact: formData.contact,
         email: formData.email,
         product: formData.productType === 'other' ? formData.otherProduct : formData.productType,
         targetSlot: selectedStall, 
         floor: selectedFloor, 
-        
-        status: "VERIFICATION_PENDING", 
-        dateRequested: new Date().toISOString(),
-        
         permitUrl: permitBase64, 
         validIdUrl: idBase64,
         clearanceUrl: clearanceBase64,
-        
         devicePlatform: Platform.OS
+      };
+
+      // 3. Send to Backend
+      const res = await fetch(`${API_URL}/stalls/apply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
       });
+
+      if (!res.ok) throw new Error("Server rejected application");
 
       setModalVisible(false);
       Alert.alert("Success", "Application Submitted!");
+      fetchData(); // Refresh immediately
       setSelectedStall(null);
     } catch (error) {
       console.error(error);
-      Alert.alert("Error", "Submission failed. Try smaller photos.");
+      Alert.alert("Error", "Submission failed. File might be too large.");
     } finally {
       setApplying(false);
     }
   };
 
   const submitPaymentReceipt = async () => {
-    if (!user || !files.receipt) {
+    if (!deviceId || !files.receipt) {
         Alert.alert("Missing Receipt", "Please upload the receipt.");
         return;
     }
-
     if (!paymentData.referenceNo || !paymentData.amountPaid) {
         Alert.alert("Missing Details", "Enter Reference No. and Amount.");
         return;
@@ -234,15 +211,23 @@ export default function StallsPage() {
     try {
       const receiptBase64 = await convertImageToText(files.receipt.uri);
       
-      await updateDoc(doc(db, "waitlist", user.uid), {
-        receiptUrl: receiptBase64, 
+      const payload = {
+        deviceId,
+        receiptUrl: receiptBase64,
         paymentReference: paymentData.referenceNo,
-        paymentAmount: paymentData.amountPaid,
-        status: "PAYMENT_REVIEW", 
-        paymentSubmittedAt: new Date().toISOString()
+        paymentAmount: paymentData.amountPaid
+      };
+
+      const res = await fetch(`${API_URL}/stalls/pay`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
       });
+
+      if (!res.ok) throw new Error("Server payment error");
       
       Alert.alert("Sent", "Payment submitted for review.");
+      fetchData();
     } catch (error) {
       console.error(error);
       Alert.alert("Error", "Could not process receipt.");
@@ -283,6 +268,7 @@ export default function StallsPage() {
                 </Text>
             </Card.Content>
         </Card>
+        <Button mode="text" onPress={fetchData} style={{marginTop: 20}}>Check for Updates</Button>
       </SafeAreaView>
     );
   }
@@ -322,10 +308,6 @@ export default function StallsPage() {
                     </Text>
                     <Text style={{fontSize: 10, color: '#C62828', fontWeight: 'bold', textAlign: 'center'}}>(NO PARTIAL PAYMENT)</Text>
                 </View>
-                
-                <View style={{backgroundColor: '#ffebee', padding: 10, borderRadius: 8, marginTop: 10}}>
-                    <Text style={{color: '#b71c1c', textAlign: 'center', fontWeight: 'bold', fontSize: 12}}>{PAYMENT_INFO.note}</Text>
-                </View>
               </Card.Content>
             </Card>
 
@@ -345,6 +327,8 @@ export default function StallsPage() {
             {myApplication.status === "PAYMENT_REVIEW" && (
                 <Text style={{textAlign:'center', marginTop:15, color:'#F57C00'}}>Waiting for Admin Confirmation...</Text>
             )}
+            
+            <Button mode="text" onPress={fetchData} style={{marginTop: 20}}>Refresh Status</Button>
         </ScrollView>
       </SafeAreaView>
     );
@@ -357,7 +341,11 @@ export default function StallsPage() {
         <Icon name="storefront-outline" size={28} color="#1B5E20" />
       </View>
 
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+      <ScrollView 
+        style={styles.scrollView} 
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchData} colors={['#1B5E20']} />}
+      >
         <Card style={styles.floorCard} mode="elevated">
           <Card.Content>
             <Text variant="titleMedium" style={styles.sectionTitle}>Select Location</Text>
