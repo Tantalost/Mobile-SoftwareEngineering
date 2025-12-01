@@ -31,16 +31,13 @@ export const Dashboard: React.FC = () => {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   
-  // State for Real Data
   const [busTrips, setBusTrips] = useState<BusTrip[]>([]);
   const [lostItems, setLostItems] = useState<LostItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Fetch Data on Mount
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch Bus Routes and Lost Items in parallel
         const [routesRes, lostRes] = await Promise.all([
           fetch(`${API_URL}/bus-routes`),
           fetch(`${API_URL}/lost-found`)
