@@ -8,9 +8,18 @@ const TenantApplicationSchema = new mongoose.Schema({
   product: String,
   targetSlot: String,
   floor: String,
+  
+  // UPDATED STATUS: Added CONTRACT_PENDING and CONTRACT_REVIEW
   status: { 
     type: String, 
-    enum: ['VERIFICATION_PENDING', 'PAYMENT_UNLOCKED', 'PAYMENT_REVIEW', 'TENANT'],
+    enum: [
+      'VERIFICATION_PENDING', 
+      'PAYMENT_UNLOCKED', 
+      'PAYMENT_REVIEW', 
+      'CONTRACT_PENDING', // <--- New
+      'CONTRACT_REVIEW',  // <--- New
+      'TENANT'
+    ],
     default: 'VERIFICATION_PENDING'
   },
   
@@ -19,6 +28,11 @@ const TenantApplicationSchema = new mongoose.Schema({
   validIdUrl: String,
   clearanceUrl: String,
   receiptUrl: String,
+
+  // --- ADD THIS FOR THE CONTRACT ---
+  contractUrl: String,         // Stores the signed contract image
+  contractSubmittedAt: Date,   // Tracks when they uploaded it
+  // --------------------------------
 
   // Payment Details
   paymentReference: String,

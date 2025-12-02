@@ -1,13 +1,14 @@
 import Icon from '@expo/vector-icons/MaterialCommunityIcons';
 import React, { useState, useEffect, useMemo } from 'react';
 import { Alert, ScrollView, StyleSheet, TouchableOpacity, View, Platform, RefreshControl } from 'react-native';
-import { Card, SegmentedButtons, Text, Button, ActivityIndicator, Modal, Portal, TextInput, RadioButton } from 'react-native-paper';
+import { Card, SegmentedButtons, Text, Button, ActivityIndicator, Modal, Portal, TextInput, RadioButton, Divider } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImageManipulator from 'expo-image-manipulator'; 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import API_URL from '../../src/config';
 
+// --- CONFIGURATION ---
 const BILLING_CONFIG = {
   Permanent: { amountLabel: "₱ 6,000.00", periodLabel: "30 DAYS", rawAmount: 6000 },
   NightMarket: { amountLabel: "₱ 1,120.00", periodLabel: "7 DAYS", rawAmount: 1120 }
@@ -20,15 +21,18 @@ const PAYMENT_INFO = {
   contactInfo: "(062) 991-1630 / (062) 991-4985"
 };
 
+// --- TYPES ---
 type FileState = {
   permit: DocumentPicker.DocumentPickerAsset | null;
   validId: DocumentPicker.DocumentPickerAsset | null;
   clearance: DocumentPicker.DocumentPickerAsset | null;
   receipt: DocumentPicker.DocumentPickerAsset | null;
+  contract: DocumentPicker.DocumentPickerAsset | null; // Added Contract file type
 };
 
 type ApplicationData = {
-  status: 'VERIFICATION_PENDING' | 'PAYMENT_UNLOCKED' | 'PAYMENT_REVIEW' | 'TENANT';
+  // Added CONTRACT_PENDING and CONTRACT_REVIEW to the status types
+  status: 'VERIFICATION_PENDING' | 'PAYMENT_UNLOCKED' | 'PAYMENT_REVIEW' | 'CONTRACT_PENDING' | 'CONTRACT_REVIEW' | 'TENANT';
   targetSlot: string;
   floor: string; 
   contact: string;
@@ -40,17 +44,23 @@ type ApplicationData = {
 export default function StallsPage() {
   const [deviceId, setDeviceId] = useState<string | null>(null);
   
+  // Selection States
   const [selectedFloor, setSelectedFloor] = useState('Permanent');
   const [selectedStall, setSelectedStall] = useState<string | null>(null);
   const [occupiedStalls, setOccupiedStalls] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
   
+  // Application & UI States
+  const [loading, setLoading] = useState(true);
   const [applying, setApplying] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
+  const [modalStep, setModalStep] = useState<'form' | 'review'>('form'); 
   const [myApplication, setMyApplication] = useState<ApplicationData>(null);
 
+  // Form Data
   const [formData, setFormData] = useState({
-    fullName: '',
+    firstName: '',
+    middleName: '',
+    lastName: '',
     contact: '',
     email: '',
     productType: 'food', 
@@ -58,20 +68,21 @@ export default function StallsPage() {
   });
 
   const [paymentData, setPaymentData] = useState({
-    referenceNo: '',
-    amountPaid: ''
+    referenceNo: ''
   });
 
+  // Files State
   const [files, setFiles] = useState<FileState>({
-    permit: null, validId: null, clearance: null, receipt: null
+    permit: null, validId: null, clearance: null, receipt: null, contract: null
   });
 
+  // Computed Billing
   const currentBilling = useMemo(() => {
     const floorType = myApplication ? myApplication.floor : selectedFloor;
     return floorType === 'Night Market' ? BILLING_CONFIG.NightMarket : BILLING_CONFIG.Permanent;
   }, [selectedFloor, myApplication]);
 
-  // 1. Initialize User Identity (Device ID)
+  // --- INITIALIZATION ---
   useEffect(() => {
     const initUser = async () => {
       let id = await AsyncStorage.getItem('device_id');
@@ -84,24 +95,21 @@ export default function StallsPage() {
     initUser();
   }, []);
 
-  // 2. Poll for Data (Stalls & My Application)
   useEffect(() => {
     if (!deviceId) return;
 
-    fetchData(); // Initial Fetch
-    const interval = setInterval(fetchData, 10000); // Poll every 10s
+    fetchData(); 
+    const interval = setInterval(fetchData, 10000); 
     return () => clearInterval(interval);
   }, [deviceId, selectedFloor]);
 
   const fetchData = async () => {
     if (!deviceId) return;
     try {
-      // A. Get Occupied Stalls
       const stallsRes = await fetch(`${API_URL}/stalls/occupied?floor=${selectedFloor}`);
       const stallsData = await stallsRes.json();
       setOccupiedStalls(stallsData);
 
-      // B. Get My Application
       const myAppRes = await fetch(`${API_URL}/stalls/my-application/${deviceId}`);
       const myAppData = await myAppRes.json();
       setMyApplication(myAppData);
@@ -112,6 +120,7 @@ export default function StallsPage() {
     }
   };
 
+  // --- FILE HANDLING ---
   const pickFile = async (fileType: keyof FileState) => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
@@ -141,29 +150,46 @@ export default function StallsPage() {
     }
   };
 
-  const submitApplication = async () => {
-    if (!deviceId) return;
-    if(!formData.fullName || !formData.contact || !selectedStall) {
+  // --- FORM HANDLING ---
+  const handleContactChange = (text: string) => {
+    const numericText = text.replace(/[^0-9]/g, '');
+    if (numericText.length <= 11) {
+      setFormData({...formData, contact: numericText});
+    }
+  };
+
+  const handleReview = () => {
+    if (!formData.firstName || !formData.middleName || !formData.lastName || !formData.contact || !selectedStall) {
       Alert.alert("Incomplete", "Please fill in all text fields.");
       return;
     }
-   if (!files.permit || !files.validId || !files.clearance) {
-      Alert.alert("Missing Photos", "Please upload Permit, Valid ID, and Barangay Clearance.");
+    if (formData.contact.length !== 11) {
+      Alert.alert("Invalid Contact", "Contact number must be exactly 11 digits.");
       return;
     }
+    if (formData.productType === 'other' && !formData.otherProduct) {
+        Alert.alert("Incomplete", "Please specify your product type.");
+        return;
+    }
+    if (!files.permit || !files.validId || !files.clearance) {
+       Alert.alert("Missing Photos", "Please upload Permit, Valid ID, and Barangay Clearance.");
+       return;
+    }
+    setModalStep('review');
+  };
 
+  const submitApplication = async () => {
+    if (!deviceId) return;
     setApplying(true);
-
     try {
-      // 1. Convert Images
-      const permitBase64 = await convertImageToText(files.permit.uri);
-      const idBase64 = await convertImageToText(files.validId.uri);
-      const clearanceBase64 = await convertImageToText(files.clearance.uri);
+      const permitBase64 = await convertImageToText(files.permit!.uri);
+      const idBase64 = await convertImageToText(files.validId!.uri);
+      const clearanceBase64 = await convertImageToText(files.clearance!.uri);
+      const fullCombinedName = `${formData.firstName} ${formData.middleName} ${formData.lastName}`;
 
-      // 2. Prepare Payload
       const payload = {
         deviceId,
-        name: formData.fullName,
+        name: fullCombinedName,
         contact: formData.contact,
         email: formData.email,
         product: formData.productType === 'other' ? formData.otherProduct : formData.productType,
@@ -175,7 +201,6 @@ export default function StallsPage() {
         devicePlatform: Platform.OS
       };
 
-      // 3. Send to Backend
       const res = await fetch(`${API_URL}/stalls/apply`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -185,12 +210,13 @@ export default function StallsPage() {
       if (!res.ok) throw new Error("Server rejected application");
 
       setModalVisible(false);
+      setModalStep('form'); 
       Alert.alert("Success", "Application Submitted!");
-      fetchData(); // Refresh immediately
+      fetchData(); 
       setSelectedStall(null);
     } catch (error) {
       console.error(error);
-      Alert.alert("Error", "Submission failed. File might be too large.");
+      Alert.alert("Error", "Submission failed.");
     } finally {
       setApplying(false);
     }
@@ -201,21 +227,19 @@ export default function StallsPage() {
         Alert.alert("Missing Receipt", "Please upload the receipt.");
         return;
     }
-    if (!paymentData.referenceNo || !paymentData.amountPaid) {
-        Alert.alert("Missing Details", "Enter Reference No. and Amount.");
+    if (!paymentData.referenceNo) {
+        Alert.alert("Missing Details", "Please enter the Reference Number.");
         return;
     }
 
     setApplying(true);
-
     try {
       const receiptBase64 = await convertImageToText(files.receipt.uri);
-      
       const payload = {
         deviceId,
         receiptUrl: receiptBase64,
         paymentReference: paymentData.referenceNo,
-        paymentAmount: paymentData.amountPaid
+        paymentAmount: currentBilling.rawAmount 
       };
 
       const res = await fetch(`${API_URL}/stalls/pay`, {
@@ -225,7 +249,6 @@ export default function StallsPage() {
       });
 
       if (!res.ok) throw new Error("Server payment error");
-      
       Alert.alert("Sent", "Payment submitted for review.");
       fetchData();
     } catch (error) {
@@ -236,14 +259,43 @@ export default function StallsPage() {
     }
   };
 
+  // --- SUBMIT CONTRACT LOGIC ---
+  const submitContract = async () => {
+    if (!deviceId || !files.contract) {
+        Alert.alert("Missing Contract", "Please upload the signed contract image.");
+        return;
+    }
+    setApplying(true);
+    try {
+        const contractBase64 = await convertImageToText(files.contract.uri);
+        // Ensure this endpoint exists in your backend router
+        const res = await fetch(`${API_URL}/stalls/upload-contract`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                deviceId,
+                contractUrl: contractBase64
+            })
+        });
+
+        if (!res.ok) throw new Error("Server contract error");
+        Alert.alert("Success", "Contract submitted for final approval.");
+        fetchData();
+    } catch (error) {
+        console.error(error);
+        Alert.alert("Error", "Could not upload contract.");
+    } finally {
+        setApplying(false);
+    }
+  };
+
+  // --- GRID HELPERS ---
   const getSlotLabel = (index: number) => {
     return selectedFloor === 'Permanent' 
       ? `A-${101 + index}` 
       : `NM-${(index + 1).toString().padStart(2, '0')}`;
   };
-
   const isStallOccupied = (slotLabel: string) => occupiedStalls.includes(slotLabel);
-
   const handleStallPress = (slotLabel: string) => {
     if (isStallOccupied(slotLabel)) {
       Alert.alert('Occupied', `Slot ${slotLabel} is taken.`);
@@ -251,9 +303,13 @@ export default function StallsPage() {
     }
     setSelectedStall(prev => prev === slotLabel ? null : slotLabel);
   };
-
   const availableCount = 30 - occupiedStalls.length;
 
+  // ============================
+  //      RENDER LOGIC
+  // ============================
+
+  // 1. VERIFICATION PENDING
   if (myApplication?.status === "VERIFICATION_PENDING") {
     return (
       <SafeAreaView style={[styles.container, styles.centerContent]}>
@@ -273,6 +329,54 @@ export default function StallsPage() {
     );
   }
 
+  // 2. CONTRACT UPLOAD PHASE 
+  // (This appears ONLY after Payment Receipt is Approved by Admin)
+  if (myApplication?.status === "CONTRACT_PENDING" || myApplication?.status === "CONTRACT_REVIEW") {
+    return (
+        <SafeAreaView style={styles.container}>
+            <ScrollView contentContainerStyle={{padding: 20, alignItems:'center'}}>
+                <Icon name="pen" size={64} color="#1B5E20" />
+                
+                {/* Replaced Order of Payment Title with Contract Title */}
+                <Text variant="headlineSmall" style={{color: '#1B5E20', fontWeight: 'bold', marginTop: 10, textAlign: 'center'}}>
+                    Contract Signing
+                </Text>
+                
+                <Card style={[styles.statusCard, {marginTop: 20}]}>
+                    <Card.Content>
+                        {/* THE SPECIFIC TEXT CHANGE YOU REQUESTED */}
+                        <Text style={{textAlign:'center', marginBottom: 15, color: '#444', fontWeight: 'bold', fontSize: 16}}>
+                            Please Upload the Contract Signed document
+                        </Text>
+                         
+                        <Button mode="outlined" onPress={() => pickFile('contract')} icon="camera" textColor="green" style={{marginBottom: 20, borderColor: 'green'}}>
+                            {files.contract ? "Contract Photo Attached" : "Upload Signed Contract"}
+                        </Button>
+
+                        <Button 
+                            mode="contained" 
+                            onPress={submitContract} 
+                            loading={applying} 
+                            disabled={myApplication.status === "CONTRACT_REVIEW"} 
+                            style={{backgroundColor: '#1B5E20'}}
+                        >
+                            {myApplication.status === "CONTRACT_REVIEW" ? "Under Review..." : "Submit Contract"}
+                        </Button>
+                    </Card.Content>
+                </Card>
+
+                {myApplication.status === "CONTRACT_REVIEW" && (
+                    <Text style={{textAlign:'center', marginTop:15, color:'#F57C00'}}>
+                        Contract submitted. Waiting for Admin Lease Creation...
+                    </Text>
+                )}
+                <Button mode="text" onPress={fetchData} style={{marginTop: 20}}>Check Status</Button>
+            </ScrollView>
+        </SafeAreaView>
+    );
+  }
+
+  // 3. PAYMENT PHASE
   if (myApplication?.status === "PAYMENT_UNLOCKED" || myApplication?.status === "PAYMENT_REVIEW") {
     return (
       <SafeAreaView style={styles.container}>
@@ -314,7 +418,6 @@ export default function StallsPage() {
             <Text variant="titleMedium" style={{marginBottom: 10, fontWeight: 'bold', marginTop: 20, color: "#1f1d1dff"}}>Verification Details</Text>
             
             <TextInput label="OR / Reference No." value={paymentData.referenceNo} onChangeText={t => setPaymentData({...paymentData, referenceNo: t})} mode="outlined" style={{marginBottom: 10, backgroundColor: 'white'}} activeOutlineColor="#1B5E20" textColor="black" />
-            <TextInput label="Amount Paid" value={paymentData.amountPaid} onChangeText={t => setPaymentData({...paymentData, amountPaid: t})} mode="outlined" keyboardType="numeric" style={{marginBottom: 15, backgroundColor: 'white'}} activeOutlineColor="#1B5E20"  textColor="black"/>
 
             <Button mode="outlined" onPress={() => pickFile('receipt')} icon="camera" textColor="green" style={{marginBottom: 20, borderColor: 'green'}}>
               {files.receipt ? "Receipt Attached" : "Upload Receipt Photo"}
@@ -334,6 +437,7 @@ export default function StallsPage() {
     );
   }
 
+  // 4. DEFAULT: STALL SELECTION MAP
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
@@ -392,7 +496,7 @@ export default function StallsPage() {
               <Card style={styles.infoCard}>
                 <Card.Content>
                   <Text style={{color: "#0a0a0aff"}} variant="titleMedium">Slot Selected: {selectedStall}</Text>
-                  <Button mode="contained" onPress={() => setModalVisible(true)} style={{ marginTop: 15, backgroundColor: '#1B5E20'}}>
+                  <Button mode="contained" onPress={() => { setModalStep('form'); setModalVisible(true); }} style={{ marginTop: 15, backgroundColor: '#1B5E20'}}>
                    <Text> Apply for {selectedStall}</Text>
                   </Button>
                 </Card.Content>
@@ -402,51 +506,101 @@ export default function StallsPage() {
         )}
       </ScrollView>
 
+      {/* MODAL FOR NEW APPLICATIONS */}
       <Portal>
         <Modal visible={modalVisible} onDismiss={() => setModalVisible(false)} contentContainerStyle={styles.modalContent}>
           <ScrollView>
-            <Text variant="headlineSmall" style={{marginBottom: 15, fontWeight:'bold', color: '#1B5E20'}}>New Application</Text>
-            
-            <View style={{marginBottom: 15, padding: 10, backgroundColor: '#E8F5E9', borderRadius: 8}}>
-                <Text style={{fontSize: 12, color: '#444'}}>Selected Section:</Text>
-                <Text style={{fontWeight: 'bold', color: '#1B5E20'}}>{selectedFloor}</Text>
-                <Text style={{fontSize: 12, color: '#444', marginTop: 5}}>Applicable Rent:</Text>
-                <Text style={{fontWeight: 'bold', color: '#1B5E20'}}>
-                    {currentBilling.amountLabel} / {currentBilling.periodLabel}
-                </Text>
-            </View>
+            {modalStep === 'form' ? (
+              // FORM VIEW
+              <>
+                <Text variant="headlineSmall" style={{marginBottom: 15, fontWeight:'bold', color: '#1B5E20'}}>New Application</Text>
+                <View style={{marginBottom: 15, padding: 10, backgroundColor: '#E8F5E9', borderRadius: 8}}>
+                    <Text style={{fontSize: 12, color: '#444'}}>Selected Section:</Text>
+                    <Text style={{fontWeight: 'bold', color: '#1B5E20'}}>{selectedFloor}</Text>
+                    <Text style={{fontSize: 12, color: '#444', marginTop: 5}}>Applicable Rent:</Text>
+                    <Text style={{fontWeight: 'bold', color: '#1B5E20'}}>
+                        {currentBilling.amountLabel} / {currentBilling.periodLabel}
+                    </Text>
+                </View>
 
-            <TextInput label="Full Name" value={formData.fullName} onChangeText={t => setFormData({...formData, fullName: t})} style={styles.input} textColor='black' mode="outlined" outlineColor="grey" 
-            activeOutlineColor="black" />
-            <TextInput label="Contact" value={formData.contact} onChangeText={t => setFormData({...formData, contact: t})} style={styles.input} textColor='black' mode="outlined" outlineColor="grey" 
-            activeOutlineColor="black" keyboardType="phone-pad" />
-            <TextInput label="Email" value={formData.email} onChangeText={t => setFormData({...formData, email: t})} style={styles.input} textColor='black'mode="outlined" outlineColor="grey" 
-            activeOutlineColor="black" keyboardType="email-address" />
-            
-            <Text variant="titleMedium" style={{marginTop:10, color: "#000" }}>Product Type</Text>
-            <RadioButton.Group onValueChange={val => setFormData({...formData, productType: val})} value={formData.productType}>
-              <View style={styles.row}><RadioButton color="black" uncheckedColor="grey" value="food"/><Text style={{color: "#292525ff"}} >Food</Text></View>
-              <View style={styles.row}><RadioButton color="black" uncheckedColor="grey" value="clothing"/><Text style={{color: "#292525ff"}}>Clothing</Text></View>
-            </RadioButton.Group>
+                {/* Name Fields */}
+                <TextInput label="First Name" value={formData.firstName} onChangeText={t => setFormData({...formData, firstName: t})} style={styles.input} textColor='black' mode="outlined" outlineColor="grey" activeOutlineColor="black" />
+                <TextInput label="Middle Name" value={formData.middleName} onChangeText={t => setFormData({...formData, middleName: t})} style={styles.input} textColor='black' mode="outlined" outlineColor="grey" activeOutlineColor="black" />
+                <TextInput label="Last Name" value={formData.lastName} onChangeText={t => setFormData({...formData, lastName: t})} style={styles.input} textColor='black' mode="outlined" outlineColor="grey" activeOutlineColor="black" />
+                
+                <TextInput 
+                  label="Contact (09XXXXXXXXX)" 
+                  value={formData.contact} 
+                  onChangeText={handleContactChange} 
+                  style={styles.input} 
+                  textColor='black' 
+                  mode="outlined" 
+                  outlineColor="grey" 
+                  activeOutlineColor="black" 
+                  keyboardType="number-pad"
+                  maxLength={11} 
+                  right={<TextInput.Affix text="/11" />}
+                />
+                <TextInput label="Email" value={formData.email} onChangeText={t => setFormData({...formData, email: t})} style={styles.input} textColor='black'mode="outlined" outlineColor="grey" activeOutlineColor="black" keyboardType="email-address" />
+                
+                <Text variant="titleMedium" style={{marginTop:10, color: "#000" }}>Product Type</Text>
+                <RadioButton.Group onValueChange={val => setFormData({...formData, productType: val})} value={formData.productType}>
+                  <View style={styles.row}><RadioButton color="black" uncheckedColor="grey" value="food"/><Text style={{color: "#292525ff"}} >Food</Text></View>
+                  <View style={styles.row}><RadioButton color="black" uncheckedColor="grey" value="clothing"/><Text style={{color: "#292525ff"}}>Clothing</Text></View>
+                  <View style={styles.row}><RadioButton color="black" uncheckedColor="grey" value="other"/><Text style={{color: "#292525ff"}}>Others, please specify</Text></View>
+                </RadioButton.Group>
 
-            <Text variant="titleMedium" style={{marginTop:15, marginBottom: 5, color: "#000"}}>Required Documents</Text>
-            
-            <Button mode="outlined" onPress={() => pickFile('permit')} style={styles.fileButton} icon={files.permit ? "check" : "file-document-outline"}  textColor={files.permit ? "green" : "grey"}>
-                {files.permit ? "Business Permit Attached" : "Upload Business Permit"}
-            </Button>
-            
-            <Button mode="outlined" onPress={() => pickFile('validId')} style={styles.fileButton} icon={files.validId ? "check" : "card-account-details-outline"} textColor={files.validId ? "green" : "grey"}>
-              {files.validId ? "Valid ID Attached" : "Upload Valid ID"}
-            </Button>
-            
-            <Button mode="outlined" onPress={() => pickFile('clearance')} style={styles.fileButton} icon={files.clearance ? "check" : "file-certificate-outline"} textColor={files.clearance ? "green" : "grey"}>
-              {files.clearance ? "Barangay Clearance Attached" : "Upload Brgy. Clearance"}
-            </Button>
-            
-            <View style={{flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 20}}>
-              <Button onPress={() => setModalVisible(false)} textColor='grey'>Cancel</Button>
-              <Button mode="contained" onPress={submitApplication} loading={applying} buttonColor="#1B5E20"><Text style= {{fontWeight: 'bold'}} >Submit</Text></Button>
-            </View>
+                {formData.productType === 'other' && (
+                   <TextInput 
+                     label="Specify Product" 
+                     value={formData.otherProduct} 
+                     onChangeText={t => setFormData({...formData, otherProduct: t})} 
+                     style={[styles.input, {marginTop: 5}]} 
+                     textColor='black' 
+                     mode="outlined" 
+                     activeOutlineColor="black"
+                   />
+                )}
+
+                <Text variant="titleMedium" style={{marginTop:15, marginBottom: 5, color: "#000"}}>Required Documents</Text>
+                <Button mode="outlined" onPress={() => pickFile('permit')} style={styles.fileButton} icon={files.permit ? "check" : "file-document-outline"}  textColor={files.permit ? "green" : "grey"}>{files.permit ? "Business Permit Attached" : "Upload Business Permit"}</Button>
+                <Button mode="outlined" onPress={() => pickFile('validId')} style={styles.fileButton} icon={files.validId ? "check" : "card-account-details-outline"} textColor={files.validId ? "green" : "grey"}>{files.validId ? "Valid ID Attached" : "Upload Valid ID"}</Button>
+                <Button mode="outlined" onPress={() => pickFile('clearance')} style={styles.fileButton} icon={files.clearance ? "check" : "file-certificate-outline"} textColor={files.clearance ? "green" : "grey"}>{files.clearance ? "Barangay Clearance Attached" : "Upload Brgy. Clearance"}</Button>
+                
+                <View style={{flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 20}}>
+                  <Button onPress={() => setModalVisible(false)} textColor='grey'>Cancel</Button>
+                  <Button mode="contained" onPress={handleReview} buttonColor="#1B5E20"><Text style= {{fontWeight: 'bold'}}>Review Application</Text></Button>
+                </View>
+              </>
+            ) : (
+              // REVIEW VIEW
+              <>
+                <Text variant="headlineSmall" style={{marginBottom: 15, fontWeight:'bold', color: '#1B5E20', textAlign:'center'}}>Confirm Application</Text>
+                <Text style={{textAlign:'center', color:'grey', marginBottom: 20}}>Please review your details before submitting.</Text>
+                
+                <View style={styles.reviewSection}>
+                   <Text style={styles.reviewLabel}>APPLICANT NAME:</Text>
+                   <Text style={styles.reviewValue}>{formData.firstName} {formData.middleName} {formData.lastName}</Text>
+                   <Divider style={{marginVertical:5}}/>
+                   <Text style={styles.reviewLabel}>CONTACT NUMBER:</Text>
+                   <Text style={styles.reviewValue}>{formData.contact}</Text>
+                   <Divider style={{marginVertical:5}}/>
+                   <Text style={styles.reviewLabel}>EMAIL:</Text>
+                   <Text style={styles.reviewValue}>{formData.email || "N/A"}</Text>
+                   <Divider style={{marginVertical:5}}/>
+                   <Text style={styles.reviewLabel}>PRODUCT TYPE:</Text>
+                   <Text style={styles.reviewValue}>{formData.productType === 'other' ? formData.otherProduct : formData.productType.toUpperCase()}</Text>
+                   <Divider style={{marginVertical:5}}/>
+                   <Text style={styles.reviewLabel}>TARGET SLOT:</Text>
+                   <Text style={[styles.reviewValue, {color: '#1B5E20'}]}>{selectedStall} ({selectedFloor})</Text>
+                </View>
+
+                <View style={{flexDirection: 'row', justifyContent: 'space-between', marginTop: 20}}>
+                  <Button mode="outlined" onPress={() => setModalStep('form')} textColor='grey' style={{borderColor:'grey'}}>Edit Details</Button>
+                  <Button mode="contained" onPress={submitApplication} loading={applying} buttonColor="#1B5E20">Confirm & Submit</Button>
+                </View>
+              </>
+            )}
           </ScrollView>
         </Modal>
       </Portal>
@@ -490,5 +644,8 @@ const styles = StyleSheet.create({
   summaryItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   legendDot: { width: 12, height: 12, borderRadius: 3 },
   divider: { height: 1, backgroundColor: '#eee', marginVertical: 10 },
-  row: { flexDirection: 'row', alignItems: 'center'}
+  row: { flexDirection: 'row', alignItems: 'center'},
+  reviewSection: { padding: 15, backgroundColor: '#FAFAFA', borderRadius: 8, borderWidth: 1, borderColor: '#EEE' },
+  reviewLabel: { fontSize: 11, color: '#777', fontWeight: '600', marginBottom: 2 },
+  reviewValue: { fontSize: 16, fontWeight: 'bold', color: '#333', marginBottom: 5 }
 });
