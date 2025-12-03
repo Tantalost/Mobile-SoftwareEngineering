@@ -2,17 +2,17 @@ import Icon from '@expo/vector-icons/MaterialCommunityIcons';
 import { Link, useRouter, useFocusEffect } from 'expo-router';
 import React, { useMemo, useState, useCallback } from 'react';
 import { ScrollView, StyleSheet, TextInput, TouchableOpacity, View, ActivityIndicator } from 'react-native';
-import { Avatar, Card, Chip, Text } from 'react-native-paper';
+import { Avatar, Card, Chip, Text, Button } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import API_URL from '../../src/config'; 
 
-// --- Interfaces matching your Backend ---
+// --- Interfaces ---
 interface BusTrip {
   _id: string;
   templateNo: string;
   route: string;
-  time: string;
+  time: string; // Military time string "14:30"
   date: string;
   company: string;
   status: string;
@@ -28,12 +28,15 @@ interface LostItem {
   trackingNo: string;
 }
 
-type UserData = { 
-  id: string; 
-  name: string; 
-  email: string; 
-  contact: string; 
-};
+type UserData = { id: string; name: string; email: string; contact: string; };
+
+interface StallApplication {
+  status: string;
+  targetSlot: string;
+  floor: string;
+  start?: string;
+  due?: string;
+}
 
 export const Dashboard: React.FC = () => {
   const router = useRouter();
@@ -43,6 +46,7 @@ export const Dashboard: React.FC = () => {
   const [lostItems, setLostItems] = useState<LostItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<UserData | null>(null);
+  const [myApp, setMyApp] = useState<StallApplication | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -50,14 +54,16 @@ export const Dashboard: React.FC = () => {
 
       const fetchAllData = async () => {
         try {
-          // 1. Check Login Status
+          // 1. Check Login & Get User
           const storedUser = await AsyncStorage.getItem('ibt_user');
-          if (isActive) {
-             if (storedUser) {
-               setUser(JSON.parse(storedUser));
-             } else {
-               setUser(null);
-             }
+          let currentUserId = null;
+
+          if (storedUser) {
+             const parsedUser = JSON.parse(storedUser);
+             if (isActive) setUser(parsedUser);
+             currentUserId = parsedUser.id;
+          } else {
+             if (isActive) { setUser(null); setMyApp(null); }
           }
 
           // 2. Fetch Dashboard Data
@@ -69,9 +75,19 @@ export const Dashboard: React.FC = () => {
           const routesData = await routesRes.json();
           const lostData = await lostRes.json();
 
+          // 3. Fetch Stall Application if Logged In
+          let applicationData = null;
+          if (currentUserId) {
+            const appRes = await fetch(`${API_URL}/stalls/my-application/${currentUserId}`);
+            if (appRes.ok) {
+                applicationData = await appRes.json();
+            }
+          }
+
           if (isActive) {
             setBusTrips(routesData);
             setLostItems(lostData);
+            setMyApp(applicationData);
             setLoading(false);
           }
         } catch (error) {
@@ -82,58 +98,67 @@ export const Dashboard: React.FC = () => {
 
       fetchAllData();
 
-      return () => {
-        isActive = false;
-      };
+      return () => { isActive = false; };
     }, [])
   );
 
-  // Filter Bus Routes for Search
-  const filteredRoutes = useMemo(() => {
-    if (!searchQuery.trim()) {
-      return busTrips.slice(0, 3);
-    }
+  // --- HELPERS ---
 
+  // 1. Convert 24h Time to 12h AM/PM
+  const formatTime = (timeStr: string) => {
+    if (!timeStr) return '--:--';
+    const [hourStr, minuteStr] = timeStr.split(':');
+    let hour = parseInt(hourStr, 10);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    
+    hour = hour % 12;
+    hour = hour ? hour : 12; // Convert 0 to 12
+    
+    return `${hour}:${minuteStr} ${ampm}`;
+  };
+
+  const formatDate = (dateString?: string) => {
+      if (!dateString) return "N/A";
+      return new Date(dateString).toLocaleDateString();
+  };
+
+  const getStatusLabel = (status: string) => {
+      if (status === 'TENANT') return 'PAID'; 
+      return status.replace('_', ' ');
+  };
+
+  const getUserInitials = (name: string) => {
+    if (!name) return "G";
+    const parts = name.trim().split(' ');
+    if (parts.length >= 2) return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+    return name[0].toUpperCase();
+  };
+
+  // Filter Logic
+  const filteredRoutes = useMemo(() => {
+    if (!searchQuery.trim()) return busTrips.slice(0, 3);
     const query = searchQuery.toLowerCase();
-    return busTrips
-      .filter((trip) =>
-        trip.route.toLowerCase().includes(query) ||
-        trip.company.toLowerCase().includes(query) ||
-        trip.templateNo.toLowerCase().includes(query)
-      )
-      .slice(0, 4);
+    return busTrips.filter((trip) => 
+      trip.route.toLowerCase().includes(query) || 
+      trip.company.toLowerCase().includes(query) || 
+      trip.templateNo.toLowerCase().includes(query)
+    ).slice(0, 4);
   }, [busTrips, searchQuery]);
 
   const latestLostItems = lostItems.slice(0, 3);
-
+  
   const currentTrip = useMemo(() => {
     if (busTrips.length === 0) return null;
     return busTrips[0]; 
   }, [busTrips]);
 
-  const getUserInitials = (name: string) => {
-    if (!name) return "G";
-    const parts = name.trim().split(' ');
-    if (parts.length >= 2) {
-      return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
-    }
-    return name[0].toUpperCase();
-  };
-
-  // --- Navigate with Route ID ---
+  // Navigation Handlers
   const handleRoutePress = (route: BusTrip) => {
-    router.push({
-      pathname: '/(tabs)/routes',
-      params: { tripId: route._id } 
-    });
+    router.push({ pathname: '/(tabs)/routes', params: { tripId: route._id } });
   };
 
-  // --- NEW: Navigate with Lost Item ID ---
   const handleLostItemPress = (item: LostItem) => {
-    router.push({
-      pathname: '/(tabs)/lost-found',
-      params: { itemId: item._id } // Passing the specific ID
-    });
+    router.push({ pathname: '/(tabs)/lost-found', params: { itemId: item._id } });
   };
 
   if (loading) {
@@ -146,31 +171,20 @@ export const Dashboard: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
           <View>
-            <Text variant="headlineMedium" style={styles.headerTitle}>
-              Dashboard
-            </Text>
+            <Text variant="headlineMedium" style={styles.headerTitle}>Dashboard</Text>
             <Text variant="bodySmall" style={{color: '#666'}}>
                 {user ? `Welcome, ${user.name}` : 'Welcome, Guest'}
             </Text>
           </View>
           
           {user ? (
-            <Avatar.Text
-              size={40}
-              label={getUserInitials(user.name)}
-              style={styles.avatar}
-              labelStyle={styles.avatarLabel}
-            />
+            <Avatar.Text size={40} label={getUserInitials(user.name)} style={styles.avatar} labelStyle={styles.avatarLabel} />
           ) : (
-            <Avatar.Icon 
-              size={40} 
-              icon="account" 
-              style={[styles.avatar, { backgroundColor: '#B0BEC5' }]} 
-              color="white"
-            />
+            <Avatar.Icon size={40} icon="account" style={[styles.avatar, { backgroundColor: '#B0BEC5' }]} color="white" />
           )}
         </View>
       </View>
@@ -180,12 +194,69 @@ export const Dashboard: React.FC = () => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* --- SEARCH / WHERE TO SECTION --- */}
+        
+        {/* --- 1. STALL APPLICATION STATUS CARD --- */}
+        {user && myApp && (
+            <Card style={[styles.sectionCard, styles.stallCard]} mode="elevated" elevation={2}>
+                <Card.Content>
+                    <View style={styles.stallHeader}>
+                        <View style={styles.stallIconBg}>
+                            <Icon name="store" size={22} color="#43A047" />
+                        </View>
+                        <View style={{flex: 1, marginLeft: 12, marginRight: 8}}>
+                            <Text variant="titleMedium" style={{fontWeight: 'bold', color: '#43A047'}}>
+                                My Stall
+                            </Text>
+                            <Text variant="bodyMedium" style={{color: '#333', fontWeight:'bold'}}>
+                                {myApp.targetSlot} 
+                                {/* Color Adjustment: Brown/Grey for floor type */}
+                                <Text style={{fontWeight:'normal', color: '#6a8d63ff'}}> ({myApp.floor})</Text>
+                            </Text>
+                        </View>
+                        
+                        <View style={{ flexShrink: 0 }}>
+    <Chip 
+        style={[
+            styles.statusChip, 
+            myApp.status === 'TENANT' ? { backgroundColor: '#43A047' } : { backgroundColor: '#6a8d63ff' }
+        ]} 
+        textStyle={{
+            color: myApp.status === 'TENANT' ? '#FFFFFF' : '#00e626ff', 
+            fontSize: 14, 
+            fontWeight: 'bold',
+            textAlign: 'center',
+            // lineHeight: 18, // REMOVE this if it still clips, let it center automatically
+            marginTop: 4 // Optional: Fine-tune vertical center if needed on Android
+        }}
+    >
+        {getStatusLabel(myApp.status)}
+    </Chip>
+</View>
+                    </View>
+                    
+                    {/* Dates Section */}
+                    {myApp.start && (
+                        <View style={{marginTop: 15, padding: 12, backgroundColor: 'rgba(255, 255, 255, 0.6)', borderRadius: 8, borderWidth: 1, borderColor: '#d2f3d6ff'}}>
+                            <View style={{flexDirection:'row', justifyContent:'space-between', marginBottom: 6}}>
+                                <Text style={{fontSize: 12, color: '#777'}}>Start Date</Text>
+                                <Text style={{fontSize: 13, fontWeight: '600', color: '#333'}}>{formatDate(myApp.start)}</Text>
+                            </View>
+                            <View style={{flexDirection:'row', justifyContent:'space-between'}}>
+                                <Text style={{fontSize: 12, color: '#777'}}>Payment Due</Text>
+                                <Text style={{fontSize: 13, fontWeight: 'bold', color: '#d81515ff'}}>{formatDate(myApp.due)}</Text>
+                            </View>
+                        </View>
+                    )}
+
+                   
+                </Card.Content>
+            </Card>
+        )}
+
+        {/* --- 2. SEARCH / WHERE TO SECTION --- */}
         <Card style={[styles.sectionCard, styles.whereCard]} mode="elevated" elevation={3}>
           <Card.Content style={styles.whereContent}>
-            <Text variant="titleLarge" style={styles.whereTitle}>
-              Where to?
-            </Text>
+            <Text variant="titleLarge" style={styles.whereTitle}>Where to?</Text>
 
             <View style={styles.searchInputContainer}>
               <Icon name="magnify" size={20} color="#6C7B8A" />
@@ -197,11 +268,7 @@ export const Dashboard: React.FC = () => {
                 placeholderTextColor="#9AA5B1"
               />
               {!!searchQuery && (
-                <TouchableOpacity
-                  style={styles.filterButton}
-                  onPress={() => setSearchQuery('')}
-                  accessibilityLabel="Clear search"
-                >
+                <TouchableOpacity style={styles.filterButton} onPress={() => setSearchQuery('')}>
                   <Icon name="close" size={16} color="#1B5E20" />
                 </TouchableOpacity>
               )}
@@ -222,7 +289,7 @@ export const Dashboard: React.FC = () => {
                     </View>
                     <View style={styles.suggestionTextWrapper}>
                       <Text variant="bodyMedium" style={styles.suggestionTitle}>
-                        {route.company} · {route.time}
+                        {route.company} · {formatTime(route.time)} {/* Using formatTime here too */}
                       </Text>
                       <Text variant="bodySmall" style={styles.suggestionSubtitle}>
                         {route.route}
@@ -240,7 +307,7 @@ export const Dashboard: React.FC = () => {
           </Card.Content>
         </Card>
 
-        {/* --- CURRENT / NEXT TRIP SECTION --- */}
+        {/* --- 3. NEXT DEPARTURE CARD --- */}
         {currentTrip && (
           <Card style={[styles.sectionCard, styles.tripCard]} mode="elevated" elevation={2}>
             <Card.Content>
@@ -259,9 +326,7 @@ export const Dashboard: React.FC = () => {
                     {currentTrip.company}
                   </Text>
                 </View>
-                <Chip style={styles.arrivalChip} textStyle={styles.arrivalChipText}>
-                  {currentTrip.status || 'Active'}
-                </Chip>
+              
               </View>
 
               <View style={styles.tripDivider} />
@@ -277,8 +342,9 @@ export const Dashboard: React.FC = () => {
                     <Text variant="titleSmall" style={styles.stopName}>
                       Zamboanga City (IBT)
                     </Text>
+                    {/* ✅ UPDATED: Using formatTime() */}
                     <Text variant="bodySmall" style={styles.stopMeta}>
-                      {currentTrip.time}
+                      {formatTime(currentTrip.time)}
                     </Text>
                   </View>
                   <View style={styles.stopRow}>
@@ -295,7 +361,7 @@ export const Dashboard: React.FC = () => {
           </Card>
         )}
 
-        {/* --- LOST & FOUND SECTION --- */}
+        {/* --- 4. LOST & FOUND --- */}
         <Card style={[styles.sectionCard, styles.lostCard]} mode="elevated" elevation={2}>
           <Card.Content>
             <View style={styles.cardHeader}>
@@ -319,7 +385,7 @@ export const Dashboard: React.FC = () => {
                   <TouchableOpacity 
                     key={item._id} 
                     style={styles.lostItemRow}
-                    onPress={() => handleLostItemPress(item)} // Changed to TouchableOpacity with Handler
+                    onPress={() => handleLostItemPress(item)}
                     activeOpacity={0.7}
                   >
                     <View style={styles.lostItemIconWrapper}>
@@ -611,4 +677,36 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: '#E2E8F0',
   },
+
+  // --- STALL CARD STYLES ---
+ stallCard: {
+    backgroundColor: '#d9f8dbff', 
+    borderLeftWidth: 4,
+    borderLeftColor: '#1B5E20',
+    marginBottom: 20,
+    borderRadius: 20, // Matches other cards
+  },
+  stallHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between', // Pushes items apart
+    paddingRight: 4, // Adds space on the far right so chip isn't cut off
+  },
+  stallIconBg: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#1b5e1f28',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12, // Space between icon and text
+  },
+  statusChip: {
+    height: 30, // INCREASED from 24 to 30 to prevent cutting text
+    borderRadius: 15,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4, // Adds internal breathing room
+    minWidth: 60, // Ensures it's wide enough for "PAID"
+  }
 });

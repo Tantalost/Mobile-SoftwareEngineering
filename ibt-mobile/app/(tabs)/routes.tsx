@@ -4,9 +4,9 @@ import { Text, Card, Searchbar, Chip, Avatar, Button, Divider } from 'react-nati
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import API_URL from '../../src/config'; // Ensure this path is correct
+import API_URL from '../../src/config'; 
 
-// --- Interface (Must match Dashboard) ---
+// --- Interface ---
 interface BusTrip {
   _id: string;
   templateNo: string;
@@ -15,36 +15,29 @@ interface BusTrip {
   date: string;
   company: string;
   status: string;
-  busType?: string; // Optional: e.g., "Aircon" vs "Ordinary"
-  price?: number;   // Optional
-  seats?: number;   // Optional
+  busType?: string; 
+  price?: number;   
+  seats?: number;   
 }
 
 export default function RoutesPage() {
   const router = useRouter();
   
-  // 1. Capture parameters passed from Dashboard
   const params = useLocalSearchParams<{ tripId?: string; search?: string }>();
   
   const [routes, setRoutes] = useState<BusTrip[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-
-  // Manage the "Active Filter" state (for when we click from Dashboard)
   const [activeFilterId, setActiveFilterId] = useState<string | null>(null);
 
-  // --- Effect: Sync params with state when screen loads ---
   useFocusEffect(
     useCallback(() => {
       if (params.tripId) {
         setActiveFilterId(params.tripId);
-        // Clean up params so if we go back and forth it doesn't get stuck? 
-        // Actually, strictly setting state here is fine.
       } else if (params.search) {
         setSearchQuery(params.search);
       }
-      
       fetchRoutes();
     }, [params])
   );
@@ -67,16 +60,30 @@ export default function RoutesPage() {
     fetchRoutes();
   };
 
+  // --- NEW HELPER: Convert 24h to 12h AM/PM ---
+  const formatTime = (timeStr: string) => {
+    if (!timeStr) return '--:--';
+    // Splits "14:30" into ["14", "30"]
+    const [hourStr, minuteStr] = timeStr.split(':');
+    let hour = parseInt(hourStr, 10);
+    
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    
+    // Convert 24h to 12h
+    hour = hour % 12;
+    hour = hour ? hour : 12; // the hour '0' should be '12'
+    
+    return `${hour}:${minuteStr} ${ampm}`;
+  };
+
   // --- Filtering Logic ---
   const filteredRoutes = useMemo(() => {
     let data = routes;
 
-    // 1. If we have a specific ID from the dashboard (and user hasn't started typing a new search)
     if (activeFilterId && searchQuery === '') {
       return data.filter(item => item._id === activeFilterId);
     }
 
-    // 2. Standard Search Query
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       data = data.filter(
@@ -90,11 +97,10 @@ export default function RoutesPage() {
     return data;
   }, [routes, searchQuery, activeFilterId]);
 
-  // --- Clear Filters Helper ---
   const clearFilters = () => {
     setSearchQuery('');
     setActiveFilterId(null);
-    router.setParams({ tripId: '', search: '' }); // Clear URL params
+    router.setParams({ tripId: '', search: '' }); 
   };
 
   // --- Render Individual Route Card ---
@@ -114,12 +120,7 @@ export default function RoutesPage() {
                 <Text variant="bodySmall" style={styles.busType}>{item.busType || 'Standard Class'}</Text>
              </View>
           </View>
-          <Chip 
-            style={styles.statusChip} 
-            textStyle={{ color: '#1B5E20', fontSize: 15, fontWeight: 'bold'}}
-          >
-            {item.status || 'Active'}
-          </Chip>
+         
         </View>
 
         <Divider style={styles.divider} />
@@ -131,7 +132,10 @@ export default function RoutesPage() {
            </View>
            <View style={{alignItems: 'flex-end'}}>
               <Text style={styles.label}>Departure</Text>
-              <Text variant="titleMedium" style={styles.timeValue}>{item.time}</Text>
+              
+              {/* ✅ UPDATED: Now uses formatTime() */}
+              <Text variant="titleMedium" style={styles.timeValue}>{formatTime(item.time)}</Text>
+              
               <Text variant="bodySmall" style={styles.dateValue}>
                 {new Date(item.date).toLocaleDateString()}
               </Text>
@@ -159,12 +163,10 @@ export default function RoutesPage() {
       <View style={styles.headerContainer}>
         <Text variant="headlineMedium" style={styles.headerTitle}>Bus Schedules</Text>
         
-        {/* Search Bar */}
         <Searchbar
           placeholder="Search location, company..."
           onChangeText={(text) => {
             setSearchQuery(text);
-            // If user types, we assume they want to break out of the specific ID filter
             if (activeFilterId) setActiveFilterId(null); 
           }}
           value={searchQuery}
@@ -173,7 +175,6 @@ export default function RoutesPage() {
           iconColor="#1B5E20"
         />
 
-        {/* Dynamic Filter Message (If showing specific trip) */}
         {activeFilterId && (
           <View style={styles.filterBanner}>
             <MaterialCommunityIcons name="filter" size={16} color="#155724" />
@@ -262,7 +263,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: 16,
-    paddingBottom: 80, // Space for bottom tab bar
+    paddingBottom: 80, 
   },
   card: {
     backgroundColor: 'white',
@@ -329,11 +330,6 @@ const styles = StyleSheet.create({
   templateId: {
     color: '#999',
     fontSize: 10,
-  },
-  detailsLink: {
-    color: '#1B5E20',
-    fontWeight: '600',
-    fontSize: 13,
   },
   emptyContainer: {
     alignItems: 'center',

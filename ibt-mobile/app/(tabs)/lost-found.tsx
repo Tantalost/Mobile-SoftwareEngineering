@@ -117,9 +117,7 @@ export default function LostFoundPage() {
           <Text variant="headlineMedium" style={styles.headerTitle}>Lost & Found</Text>
           <Text variant="bodyMedium" style={styles.headerSubtitle}>Monitor reported items</Text>
         </View>
-        <View style={styles.headerIconBg}>
-           <Icon name="archive-search-outline" size={24} color="#1B5E20" />
-        </View>
+       
       </Surface>
 
       <View style={styles.searchContainer}>
