@@ -20,7 +20,7 @@ const uri = "mongodb+srv://axie:EpvjL4VfyKlvUnJX@ibt-backend.tz0eqej.mongodb.net
 mongoose.connect(uri)
   .then(() => console.log('MongoDB Connected'))
   .catch(err => console.log(err));
-
+ 
 // Routes
 app.use('/api/lost-found', lostFoundRoutes);
 app.use('/api/bus-routes', busRoutes); // <--- 3. Add this route
