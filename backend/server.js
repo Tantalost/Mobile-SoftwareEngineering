@@ -4,6 +4,7 @@ import mongoose from 'mongoose';
 import lostFoundRoutes from './routes/lostFoundRoutes.js';
 import busRoutes from './routes/busRoutes.js';
 import stallRoutes from './routes/stallRoutes.js'; // <--- 1. Import this
+import authRoutes from "./routes/authRoutes.js";
 
 const app = express();
 const PORT = 3000;
@@ -22,8 +23,9 @@ mongoose.connect(uri)
 
 // Routes
 app.use('/api/lost-found', lostFoundRoutes);
-app.use('/api/bus-routes', busRoutes);
-app.use('/api/stalls', stallRoutes); // <--- 3. Add this route
+app.use('/api/bus-routes', busRoutes); // <--- 3. Add this route
+app.use("/api/auth", authRoutes);
+app.use('/api/stalls', stallRoutes);
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);

@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 
 const TenantApplicationSchema = new mongoose.Schema({
-  deviceId: { type: String, required: true, unique: true }, // Replaces Firebase UID
+  userId: { type: String, required: true },// Replaces Firebase UID
   name: String,
   contact: String,
   email: String,

@@ -1,8 +1,6 @@
-// 1. IMPORT THE TENANT MODEL
 import Tenant from '../models/Tenant.js'; 
 import TenantApplication from '../models/TenantApplication.js';
-
-import Notification from '../models/Notification.js'; // Import the model
+import Notification from '../models/Notification.js'; 
 
 // Helper to create notifications internally
 const createAdminNotification = async (title, message) => {
@@ -11,7 +9,7 @@ const createAdminNotification = async (title, message) => {
       title,
       message,
       source: "System",
-      targetRole: "superadmin", // Explicitly target superadmin
+      targetRole: "superadmin", 
       date: new Date().toISOString().split('T')[0]
     });
     await newNote.save();
@@ -19,20 +17,14 @@ const createAdminNotification = async (title, message) => {
     console.error("Failed to create notification:", err);
   }
 };
-// (You can keep or remove 'import Stall' depending on if you still use it elsewhere)
 
-// 1. Get Occupied Stalls (UPDATED)
+// 1. Get Occupied Stalls (No changes needed here, relies on Tenant model)
 export const getOccupiedStalls = async (req, res) => {
   try {
-    const { floor } = req.query; // This will be "Permanent" or "Night Market"
+    const { floor } = req.query; 
 
-    // CHANGE: Look inside the 'Tenant' collection instead of 'Stall'
-    // We assume anyone in the Tenant list is "Occupied"
-    const tenants = await Tenant.find({ 
-      tenantType: floor 
-    });
+    const tenants = await Tenant.find({ tenantType: floor });
 
-    // Extract slot numbers (handling potential comma-separated slots like "A-101, A-102")
     let occupiedLabels = [];
     tenants.forEach(t => {
       if (t.slotNo) {
@@ -48,23 +40,28 @@ export const getOccupiedStalls = async (req, res) => {
   }
 };
 
-// 2. Get My Application Status
+// 2. Get My Application Status (UPDATED: Uses userId)
 export const getMyApplication = async (req, res) => {
   try {
-    const { deviceId } = req.params;
-    const application = await TenantApplication.findOne({ deviceId });
+    const { userId } = req.params; // Changed from deviceId
+    
+    // Find application linked to this User ID
+    const application = await TenantApplication.findOne({ userId: userId });
+    
     res.json(application || null); 
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
 
-// 3. Submit New Application
+// 3. Submit New Application (UPDATED: Uses userId)
 export const submitApplication = async (req, res) => {
   try {
-    const data = req.body; 
+    const data = req.body; // data contains userId now
+    
+    // Upsert based on userId
     const newApp = await TenantApplication.findOneAndUpdate(
-      { deviceId: data.deviceId },
+      { userId: data.userId },
       { ...data, status: 'VERIFICATION_PENDING' },
       { new: true, upsert: true }
     );
@@ -80,13 +77,13 @@ export const submitApplication = async (req, res) => {
   }
 };
 
-// 4. Submit Payment Receipt
+// 4. Submit Payment Receipt (UPDATED: Uses userId)
 export const submitPayment = async (req, res) => {
   try {
-    const { deviceId, receiptUrl, paymentReference, paymentAmount } = req.body;
+    const { userId, receiptUrl, paymentReference, paymentAmount } = req.body;
     
     const updatedApp = await TenantApplication.findOneAndUpdate(
-      { deviceId },
+      { userId: userId },
       { 
         receiptUrl, 
         paymentReference, 
@@ -99,7 +96,7 @@ export const submitPayment = async (req, res) => {
 
     await createAdminNotification(
       "Payment Receipt Uploaded",
-      `Ref: ${paymentReference}. Verify payment for device/user ID: ${deviceId.slice(-6)}.`
+      `Ref: ${paymentReference}. Verify payment for Applicant ID: ${userId.slice(-6)}.`
     );
 
     res.json(updatedApp);
@@ -108,17 +105,17 @@ export const submitPayment = async (req, res) => {
   }
 };
 
-// 5. Submit Contract
+// 5. Submit Contract (UPDATED: Uses userId)
 export const uploadContract = async (req, res) => {
   try {
-    const { deviceId, contractUrl } = req.body;
+    const { userId, contractUrl } = req.body;
 
-    if (!deviceId || !contractUrl) {
-      return res.status(400).json({ message: "Missing deviceId or contractUrl" });
+    if (!userId || !contractUrl) {
+      return res.status(400).json({ message: "Missing userId or contractUrl" });
     }
 
     const updatedApp = await TenantApplication.findOneAndUpdate(
-      { deviceId },
+      { userId: userId },
       { 
         contractUrl, 
         status: 'CONTRACT_REVIEW', 

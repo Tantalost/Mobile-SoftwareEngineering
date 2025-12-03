@@ -4,17 +4,20 @@ import {
   getMyApplication, 
   submitApplication, 
   submitPayment,
-  uploadContract // <--- Import this
+  uploadContract 
 } from '../controllers/stallController.js';
 
 const router = express.Router();
 
+// Public route to see which slots are red
 router.get('/occupied', getOccupiedStalls);
-router.get('/my-application/:deviceId', getMyApplication);
+
+// UPDATED: Now uses :userId instead of :deviceId
+router.get('/my-application/:userId', getMyApplication);
+
+// Transaction routes (Apply, Pay, Contract)
 router.post('/apply', submitApplication);
 router.post('/pay', submitPayment);
-
-// <--- Add this new route
 router.post('/upload-contract', uploadContract);
 
 export default router;
