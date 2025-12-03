@@ -245,9 +245,8 @@ export default function StallsPage() {
     );
   }
 
-  // ... (Keep existing PAYMENT view and DEFAULT MAP view) ...
+
   if (myApplication?.status === "PAYMENT_UNLOCKED" || myApplication?.status === "PAYMENT_REVIEW") {
-    // ... (Your existing payment render code) ...
     return (
         <SafeAreaView style={styles.container}>
           <View style={styles.header}><Text variant="headlineSmall" style={{fontWeight:'bold', color: '#1B5E20'}}>Payment</Text><TouchableOpacity onPress={handleLogout}><Icon name="logout" size={24} color="#D32F2F" /></TouchableOpacity></View>
@@ -292,7 +291,7 @@ export default function StallsPage() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F5F5' },
+  container: { flex: 1, backgroundColor: '#F5F5F5',},
   centerContent: { justifyContent: 'center', alignItems: 'center', padding: 20 },
   header: { backgroundColor: '#FFFFFF', padding: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems:'center' },
   headerTitle: { fontWeight: '700', color: "#0a0a0aff"},
