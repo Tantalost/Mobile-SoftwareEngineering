@@ -1,8 +1,9 @@
 import Icon from '@expo/vector-icons/MaterialCommunityIcons';
-import React, { useState, useEffect } from 'react';
-import { ScrollView, StyleSheet, View, ActivityIndicator, RefreshControl, StatusBar } from 'react-native';
-import { Card, Chip, Searchbar, Text, Surface } from 'react-native-paper';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { ScrollView, StyleSheet, View, ActivityIndicator, RefreshControl, StatusBar, TouchableOpacity } from 'react-native';
+import { Card, Searchbar, Text, Surface } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router'; // Added Imports
 import API_URL from '../../src/config';
 
 interface LostItem {
@@ -16,14 +17,27 @@ interface LostItem {
 }
 
 export default function LostFoundPage() {
+  const router = useRouter();
+  const params = useLocalSearchParams<{ itemId?: string }>(); // Capture params
+  
   const [searchQuery, setSearchQuery] = useState('');
   const [lostItems, setLostItems] = useState<LostItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  
+  // State for active filter from Dashboard
+  const [activeItemId, setActiveItemId] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchItems();
-  }, []);
+  // --- 1. Handle Incoming Params via useFocusEffect ---
+  useFocusEffect(
+    useCallback(() => {
+      if (params.itemId) {
+        setActiveItemId(params.itemId);
+        setSearchQuery(''); // Clear search text if we are filtering by ID
+      }
+      fetchItems();
+    }, [params])
+  );
 
   const fetchItems = async () => {
     try {
@@ -43,19 +57,38 @@ export default function LostFoundPage() {
     }
   };
 
-  const onRefresh = React.useCallback(() => {
+  const onRefresh = useCallback(() => {
     setRefreshing(true);
     fetchItems();
   }, []);
 
-  const filteredItems = lostItems.filter((item) => {
-    const searchLower = searchQuery.toLowerCase();
-    return (
-      item.trackingNo.toLowerCase().includes(searchLower) ||
-      item.description.toLowerCase().includes(searchLower) ||
-      item.location.toLowerCase().includes(searchLower)
-    );
-  });
+  const clearFilter = () => {
+    setActiveItemId(null);
+    setSearchQuery('');
+    router.setParams({ itemId: '' }); // Clear URL params
+  };
+
+  // --- 2. Updated Filtering Logic ---
+  const filteredItems = useMemo(() => {
+    let data = lostItems;
+
+    // Priority 1: Filter by Specific ID (from Dashboard click)
+    if (activeItemId) {
+      return data.filter(item => item._id === activeItemId);
+    }
+
+    // Priority 2: Standard Text Search
+    if (searchQuery.trim()) {
+      const searchLower = searchQuery.toLowerCase();
+      data = data.filter((item) =>
+        item.trackingNo.toLowerCase().includes(searchLower) ||
+        item.description.toLowerCase().includes(searchLower) ||
+        item.location.toLowerCase().includes(searchLower)
+      );
+    }
+
+    return data;
+  }, [lostItems, searchQuery, activeItemId]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -92,12 +125,27 @@ export default function LostFoundPage() {
       <View style={styles.searchContainer}>
         <Searchbar
           placeholder="Search items..."
-          onChangeText={setSearchQuery}
+          onChangeText={(text) => {
+            setSearchQuery(text);
+            // If user types, clear the specific ID filter
+            if (activeItemId) setActiveItemId(null);
+          }}
           value={searchQuery}
           style={styles.searchbar}
           inputStyle={styles.searchInput}
           iconColor="#666"
         />
+
+        {/* --- 3. Filter Banner (Show only if activeItemId is present) --- */}
+        {activeItemId && (
+          <View style={styles.filterBanner}>
+            <Icon name="filter" size={16} color="#155724" />
+            <Text style={styles.filterText}>Showing selected item</Text>
+            <TouchableOpacity onPress={clearFilter}>
+              <Text style={styles.clearFilterText}>Show All</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
       <ScrollView 
@@ -166,6 +214,11 @@ export default function LostFoundPage() {
             </View>
             <Text variant="titleMedium" style={styles.emptyTitle}>No Records Found</Text>
             <Text variant="bodyMedium" style={styles.emptySub}>Try adjusting your search criteria</Text>
+            {(activeItemId || searchQuery) && (
+                 <TouchableOpacity onPress={clearFilter} style={{marginTop: 10}}>
+                    <Text style={{color: '#1B5E20', fontWeight: 'bold'}}>Clear Search</Text>
+                 </TouchableOpacity>
+            )}
           </View>
         )}
       </ScrollView>
@@ -176,7 +229,7 @@ export default function LostFoundPage() {
 const styles = StyleSheet.create({
   container: { 
     flex: 1, 
-    backgroundColor: '#F7F9FC' // Slightly cooler grey for modern feel
+    backgroundColor: '#F7F9FC'
   },
   loadingContainer: { 
     flex: 1, 
@@ -229,7 +282,29 @@ const styles = StyleSheet.create({
     height: 48,
   },
   searchInput: {
-    minHeight: 0, // Fix for React Native Paper vertical alignment
+    minHeight: 0, 
+  },
+  // New Filter Banner Styles
+  filterBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#D4EDDA',
+    padding: 10,
+    borderRadius: 8,
+    marginTop: 10,
+    gap: 8,
+  },
+  filterText: {
+    flex: 1,
+    color: '#155724',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  clearFilterText: {
+    color: '#1B5E20',
+    fontWeight: 'bold',
+    fontSize: 12,
+    textDecorationLine: 'underline',
   },
   
   // List Styles
@@ -312,7 +387,7 @@ const styles = StyleSheet.create({
   locationContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F1F8E9', // Very light green bg
+    backgroundColor: '#F1F8E9',
     padding: 10,
     borderRadius: 10,
   },
@@ -320,7 +395,7 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   locationText: {
-    color: '#2E7D32', // Darker green text
+    color: '#2E7D32',
     fontWeight: '600',
     flex: 1,
   },

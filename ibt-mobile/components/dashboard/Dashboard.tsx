@@ -1,31 +1,39 @@
 import Icon from '@expo/vector-icons/MaterialCommunityIcons';
-import { Link, useRouter } from 'expo-router';
-import React, { useMemo, useState, useEffect } from 'react';
+import { Link, useRouter, useFocusEffect } from 'expo-router';
+import React, { useMemo, useState, useCallback } from 'react';
 import { ScrollView, StyleSheet, TextInput, TouchableOpacity, View, ActivityIndicator } from 'react-native';
 import { Avatar, Card, Chip, Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import API_URL from '../../src/config'; // Adjust path if needed based on your folder structure
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import API_URL from '../../src/config'; 
 
 // --- Interfaces matching your Backend ---
 interface BusTrip {
   _id: string;
   templateNo: string;
-  route: string;         // e.g. "Zamboanga - Ipil"
-  time: string;          // e.g. "08:00 AM"
-  date: string;          // ISO Date
-  company: string;       // e.g. "Ceres"
+  route: string;
+  time: string;
+  date: string;
+  company: string;
   status: string;
 }
 
 interface LostItem {
   _id: string;
-  title?: string;        // Your backend might return 'description' or 'trackingNo' based on schema
+  title?: string;
   description: string;
   location: string;
   dateTime: string;
   status: string;
   trackingNo: string;
 }
+
+type UserData = { 
+  id: string; 
+  name: string; 
+  email: string; 
+  contact: string; 
+};
 
 export const Dashboard: React.FC = () => {
   const router = useRouter();
@@ -34,33 +42,54 @@ export const Dashboard: React.FC = () => {
   const [busTrips, setBusTrips] = useState<BusTrip[]>([]);
   const [lostItems, setLostItems] = useState<LostItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<UserData | null>(null);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [routesRes, lostRes] = await Promise.all([
-          fetch(`${API_URL}/bus-routes`),
-          fetch(`${API_URL}/lost-found`)
-        ]);
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
 
-        const routesData = await routesRes.json();
-        const lostData = await lostRes.json();
+      const fetchAllData = async () => {
+        try {
+          // 1. Check Login Status
+          const storedUser = await AsyncStorage.getItem('ibt_user');
+          if (isActive) {
+             if (storedUser) {
+               setUser(JSON.parse(storedUser));
+             } else {
+               setUser(null);
+             }
+          }
 
-        setBusTrips(routesData);
-        setLostItems(lostData);
-      } catch (error) {
-        console.error("Dashboard fetch error:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
+          // 2. Fetch Dashboard Data
+          const [routesRes, lostRes] = await Promise.all([
+            fetch(`${API_URL}/bus-routes`),
+            fetch(`${API_URL}/lost-found`)
+          ]);
 
-    fetchData();
-  }, []);
+          const routesData = await routesRes.json();
+          const lostData = await lostRes.json();
+
+          if (isActive) {
+            setBusTrips(routesData);
+            setLostItems(lostData);
+            setLoading(false);
+          }
+        } catch (error) {
+          console.error("Dashboard fetch error:", error);
+          if (isActive) setLoading(false);
+        }
+      };
+
+      fetchAllData();
+
+      return () => {
+        isActive = false;
+      };
+    }, [])
+  );
 
   // Filter Bus Routes for Search
   const filteredRoutes = useMemo(() => {
-    // If no search, show upcoming 3 trips
     if (!searchQuery.trim()) {
       return busTrips.slice(0, 3);
     }
@@ -75,18 +104,37 @@ export const Dashboard: React.FC = () => {
       .slice(0, 4);
   }, [busTrips, searchQuery]);
 
-  // Get Latest 3 Lost Items
   const latestLostItems = lostItems.slice(0, 3);
 
-  // Calculate "Next Trip" (Current Trip)
-  // Logic: Find the first trip that hasn't happened yet (or is active today)
   const currentTrip = useMemo(() => {
     if (busTrips.length === 0) return null;
-    
-    // Simple logic: Just pick the first one from the sorted list (Backend sorts by Date/Time)
-    // Or you could add logic to compare with new Date() here.
     return busTrips[0]; 
   }, [busTrips]);
+
+  const getUserInitials = (name: string) => {
+    if (!name) return "G";
+    const parts = name.trim().split(' ');
+    if (parts.length >= 2) {
+      return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+    }
+    return name[0].toUpperCase();
+  };
+
+  // --- Navigate with Route ID ---
+  const handleRoutePress = (route: BusTrip) => {
+    router.push({
+      pathname: '/(tabs)/routes',
+      params: { tripId: route._id } 
+    });
+  };
+
+  // --- NEW: Navigate with Lost Item ID ---
+  const handleLostItemPress = (item: LostItem) => {
+    router.push({
+      pathname: '/(tabs)/lost-found',
+      params: { itemId: item._id } // Passing the specific ID
+    });
+  };
 
   if (loading) {
     return (
@@ -100,15 +148,30 @@ export const Dashboard: React.FC = () => {
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <View style={styles.headerContent}>
-          <Text variant="headlineMedium" style={styles.headerTitle}>
-            Dashboard
-          </Text>
-          <Avatar.Text
-            size={40}
-            label="AD"
-            style={styles.avatar}
-            labelStyle={styles.avatarLabel}
-          />
+          <View>
+            <Text variant="headlineMedium" style={styles.headerTitle}>
+              Dashboard
+            </Text>
+            <Text variant="bodySmall" style={{color: '#666'}}>
+                {user ? `Welcome, ${user.name}` : 'Welcome, Guest'}
+            </Text>
+          </View>
+          
+          {user ? (
+            <Avatar.Text
+              size={40}
+              label={getUserInitials(user.name)}
+              style={styles.avatar}
+              labelStyle={styles.avatarLabel}
+            />
+          ) : (
+            <Avatar.Icon 
+              size={40} 
+              icon="account" 
+              style={[styles.avatar, { backgroundColor: '#B0BEC5' }]} 
+              color="white"
+            />
+          )}
         </View>
       </View>
 
@@ -148,7 +211,12 @@ export const Dashboard: React.FC = () => {
             {filteredRoutes.length > 0 ? (
               <View style={styles.suggestionList}>
                 {filteredRoutes.map((route) => (
-                  <View key={route._id} style={styles.suggestionItem}>
+                  <TouchableOpacity 
+                    key={route._id} 
+                    style={styles.suggestionItem}
+                    onPress={() => handleRoutePress(route)}
+                    activeOpacity={0.7}
+                  >
                     <View style={styles.suggestionIcon}>
                       <Icon name="bus" size={16} color="#1B5E20" />
                     </View>
@@ -160,7 +228,8 @@ export const Dashboard: React.FC = () => {
                         {route.route}
                       </Text>
                     </View>
-                  </View>
+                    <Icon name="chevron-right" size={20} color="#CBD5E1" />
+                  </TouchableOpacity>
                 ))}
               </View>
             ) : (
@@ -214,7 +283,6 @@ export const Dashboard: React.FC = () => {
                   </View>
                   <View style={styles.stopRow}>
                     <Text variant="titleSmall" style={styles.stopNameInactive}>
-                      {/* Extract destination from route string if possible, or just show route */}
                       {currentTrip.route.replace('Zamboanga - ', '')}
                     </Text>
                     <Text variant="bodySmall" style={styles.stopMeta}>
@@ -248,21 +316,26 @@ export const Dashboard: React.FC = () => {
                  <Text style={{color: '#999', fontStyle:'italic'}}>No recent lost items reported.</Text>
               ) : (
                 latestLostItems.map((item, index) => (
-                  <View key={item._id} style={styles.lostItemRow}>
+                  <TouchableOpacity 
+                    key={item._id} 
+                    style={styles.lostItemRow}
+                    onPress={() => handleLostItemPress(item)} // Changed to TouchableOpacity with Handler
+                    activeOpacity={0.7}
+                  >
                     <View style={styles.lostItemIconWrapper}>
                       <Icon name="briefcase-search-outline" size={18} color="#1B5E20" />
                     </View>
                     <View style={styles.lostItemContent}>
                       <Text variant="bodyMedium" style={styles.lostItemTitle}>
-                        {/* Use tracking number as title, or description if short */}
                         {item.description.length > 25 ? item.description.substring(0, 25) + "..." : item.description}
                       </Text>
                       <Text variant="bodySmall" style={styles.lostItemMeta}>
-                         #{item.trackingNo} • {item.location}
+                          #{item.trackingNo} • {item.location}
                       </Text>
                     </View>
+                    <Icon name="chevron-right" size={20} color="#CBD5E1" />
                     {index < latestLostItems.length - 1 && <View style={styles.lostItemDivider} />}
-                  </View>
+                  </TouchableOpacity>
                 ))
               )}
             </View>
@@ -331,27 +404,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0F172A',
   },
-  locationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#E7F3FF',
-    borderRadius: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    gap: 12,
-  },
-  locationIconWrapper: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#D1F8D3',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  locationText: {
-    color: '#0F172A',
-    fontWeight: '600',
-  },
   sectionHeader: {
     fontWeight: '700',
     color: '#1A1A1A',
@@ -386,6 +438,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    paddingVertical: 8, 
   },
   suggestionIcon: {
     width: 32,

@@ -1,177 +1,209 @@
-import Icon from '@expo/vector-icons/MaterialCommunityIcons';
-import React, { useState, useEffect, useCallback } from 'react';
-import { ScrollView, StyleSheet, View, RefreshControl, ActivityIndicator, StatusBar } from 'react-native';
-import { Card, Chip, Searchbar, Text, Surface } from 'react-native-paper';
+import React, { useState, useCallback, useMemo } from 'react';
+import { StyleSheet, View, FlatList, RefreshControl, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { Text, Card, Searchbar, Chip, Avatar, Button, Divider } from 'react-native-paper';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import API_URL from '../../src/config';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import API_URL from '../../src/config'; // Ensure this path is correct
 
+// --- Interface (Must match Dashboard) ---
 interface BusTrip {
   _id: string;
   templateNo: string;
-  route: string;         
-  time: string;         
-  departureTime?: string;
-  date: string;          
-  company: string;       
-  status: string;       
-  ticketReferenceNo: string;
-  isArchived: boolean;
+  route: string;
+  time: string;
+  date: string;
+  company: string;
+  status: string;
+  busType?: string; // Optional: e.g., "Aircon" vs "Ordinary"
+  price?: number;   // Optional
+  seats?: number;   // Optional
 }
 
 export default function RoutesPage() {
-  const [trips, setTrips] = useState<BusTrip[]>([]);
+  const router = useRouter();
+  
+  // 1. Capture parameters passed from Dashboard
+  const params = useLocalSearchParams<{ tripId?: string; search?: string }>();
+  
+  const [routes, setRoutes] = useState<BusTrip[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  useEffect(() => {
-    fetchTrips();
-  }, []);
+  // Manage the "Active Filter" state (for when we click from Dashboard)
+  const [activeFilterId, setActiveFilterId] = useState<string | null>(null);
 
-  const fetchTrips = async () => {
-    try {
-      console.log(`Fetching trips from: ${API_URL}/bus-routes`);
-      const response = await fetch(`${API_URL}/bus-routes`);
-      const text = await response.text();
-      
-      try {
-        const data = JSON.parse(text);
-        setTrips(data);
-      } catch (e) {
-        console.error("JSON Parse error:", text);
+  // --- Effect: Sync params with state when screen loads ---
+  useFocusEffect(
+    useCallback(() => {
+      if (params.tripId) {
+        setActiveFilterId(params.tripId);
+        // Clean up params so if we go back and forth it doesn't get stuck? 
+        // Actually, strictly setting state here is fine.
+      } else if (params.search) {
+        setSearchQuery(params.search);
       }
+      
+      fetchRoutes();
+    }, [params])
+  );
+
+  const fetchRoutes = async () => {
+    try {
+      const response = await fetch(`${API_URL}/bus-routes`);
+      const data = await response.json();
+      setRoutes(data);
     } catch (error) {
-      console.error("Error fetching trips:", error);
+      console.error('Error fetching routes:', error);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
-  const onRefresh = useCallback(() => {
+  const onRefresh = () => {
     setRefreshing(true);
-    fetchTrips();
-  }, []);
-
-  const filteredTrips = trips.filter(trip => 
-    trip.route.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    trip.company.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    trip.templateNo.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  const getStatusColor = (status: string) => {
-    const s = status ? status.toLowerCase() : 'active';
-    if (s === 'active' || s === 'on time') return { bg: '#E8F5E9', text: '#2E7D32', border: '#A5D6A7' };
-    if (s === 'delayed') return { bg: '#FFF3E0', text: '#E65100', border: '#FFCC80' };
-    if (s === 'cancelled') return { bg: '#FFEBEE', text: '#C62828', border: '#EF9A9A' };
-    return { bg: '#F5F5F5', text: '#616161', border: '#E0E0E0' };
+    fetchRoutes();
   };
+
+  // --- Filtering Logic ---
+  const filteredRoutes = useMemo(() => {
+    let data = routes;
+
+    // 1. If we have a specific ID from the dashboard (and user hasn't started typing a new search)
+    if (activeFilterId && searchQuery === '') {
+      return data.filter(item => item._id === activeFilterId);
+    }
+
+    // 2. Standard Search Query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      data = data.filter(
+        (item) =>
+          item.route.toLowerCase().includes(query) ||
+          item.company.toLowerCase().includes(query) ||
+          item.templateNo.toLowerCase().includes(query)
+      );
+    }
+
+    return data;
+  }, [routes, searchQuery, activeFilterId]);
+
+  // --- Clear Filters Helper ---
+  const clearFilters = () => {
+    setSearchQuery('');
+    setActiveFilterId(null);
+    router.setParams({ tripId: '', search: '' }); // Clear URL params
+  };
+
+  // --- Render Individual Route Card ---
+  const renderItem = ({ item }: { item: BusTrip }) => (
+    <Card style={styles.card} mode="elevated">
+      <Card.Content>
+        <View style={styles.cardHeader}>
+          <View style={styles.companyContainer}>
+             <Avatar.Icon 
+                size={36} 
+                icon="bus" 
+                style={{backgroundColor: '#E8F5E9'}} 
+                color="#1B5E20"
+             />
+             <View>
+                <Text variant="titleMedium" style={styles.companyName}>{item.company}</Text>
+                <Text variant="bodySmall" style={styles.busType}>{item.busType || 'Standard Class'}</Text>
+             </View>
+          </View>
+          <Chip 
+            style={styles.statusChip} 
+            textStyle={{ color: '#1B5E20', fontSize: 15, fontWeight: 'bold'}}
+          >
+            {item.status || 'Active'}
+          </Chip>
+        </View>
+
+        <Divider style={styles.divider} />
+
+        <View style={styles.routeRow}>
+           <View style={{flex: 1}}>
+              <Text style={styles.label}>Route</Text>
+              <Text variant="titleMedium" style={styles.value}>{item.route}</Text>
+           </View>
+           <View style={{alignItems: 'flex-end'}}>
+              <Text style={styles.label}>Departure</Text>
+              <Text variant="titleMedium" style={styles.timeValue}>{item.time}</Text>
+              <Text variant="bodySmall" style={styles.dateValue}>
+                {new Date(item.date).toLocaleDateString()}
+              </Text>
+           </View>
+        </View>
+
+        <View style={styles.footerRow}>
+           <Text style={styles.templateId}>ID: {item.templateNo}</Text>
+        </View>
+      </Card.Content>
+    </Card>
+  );
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
+      <View style={[styles.container, styles.centerContent]}>
         <ActivityIndicator size="large" color="#1B5E20" />
-        <Text variant="bodyMedium" style={{ marginTop: 16, color: '#666' }}>Loading Schedules...</Text>
       </View>
     );
   }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-
-      {/* Header */}
-      <Surface style={styles.header} elevation={0}>
-        <View>
-          <Text variant="headlineMedium" style={styles.headerTitle}>Bus Schedules</Text>
-          <Text variant="bodyMedium" style={styles.headerSubtitle}>Upcoming Departures</Text>
-        </View>
-        <View style={styles.headerIconBg}>
-           <Icon name="calendar-clock" size={26} color="#1B5E20" />
-        </View>
-      </Surface>
-
-      {/* Search */}
-      <View style={styles.searchContainer}>
+      {/* Header Section */}
+      <View style={styles.headerContainer}>
+        <Text variant="headlineMedium" style={styles.headerTitle}>Bus Schedules</Text>
+        
+        {/* Search Bar */}
         <Searchbar
-          placeholder="Search destination or company..."
-          onChangeText={setSearchQuery}
+          placeholder="Search location, company..."
+          onChangeText={(text) => {
+            setSearchQuery(text);
+            // If user types, we assume they want to break out of the specific ID filter
+            if (activeFilterId) setActiveFilterId(null); 
+          }}
           value={searchQuery}
-          style={styles.searchbar}
+          style={styles.searchBar}
           inputStyle={styles.searchInput}
-          iconColor="#666"
+          iconColor="#1B5E20"
         />
+
+        {/* Dynamic Filter Message (If showing specific trip) */}
+        {activeFilterId && (
+          <View style={styles.filterBanner}>
+            <MaterialCommunityIcons name="filter" size={16} color="#155724" />
+            <Text style={styles.filterText}>Showing selected route</Text>
+            <TouchableOpacity onPress={clearFilters}>
+              <Text style={styles.clearFilterText}>Show All</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
+      {/* Main List */}
+      <FlatList
+        data={filteredRoutes}
+        keyExtractor={(item) => item._id}
+        renderItem={renderItem}
+        contentContainerStyle={styles.listContent}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#1B5E20']} />
         }
-      >
-        <Text variant="labelMedium" style={styles.resultsText}>
-          UPCOMING TRIPS ({filteredTrips.length})
-        </Text>
-
-        {filteredTrips.map((trip) => {
-          const statusStyle = getStatusColor(trip.status);
-          const tripDate = new Date(trip.date);
-
-          return (
-            <Card key={trip._id} style={styles.tripCard} mode="elevated">
-              <Card.Content>
-                
-                {/* Top Row: Date & Status */}
-                <View style={styles.cardHeader}>
-                  <View style={styles.dateBadge}>
-                    <Icon name="calendar" size={14} color="#555" />
-                    <Text style={styles.dateText}>
-                      {tripDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                    </Text>
-                  </View>
-                  
-                  <Chip style={[styles.statusChip, { backgroundColor: statusStyle.bg, borderColor: statusStyle.border }]}>
-                     <Text style={{color: statusStyle.text, fontSize: 10, fontWeight: '700'}}>{trip.status ? trip.status.toUpperCase() : 'ACTIVE'}</Text>
-                  </Chip>
-                </View>
-
-                {/* Main Info: Time & Route */}
-                <View style={styles.mainInfo}>
-                  <View style={styles.timeContainer}>
-                    <Text style={styles.timeText}>{trip.time}</Text>
-                    <Text style={styles.departureLabel}>DEPARTURE</Text>
-                  </View>
-                  
-                  <View style={styles.verticalDivider} />
-                  
-                  <View style={styles.routeContainer}>
-                    <Text variant="titleMedium" style={styles.companyText}>{trip.company}</Text>
-                    <View style={styles.routeRow}>
-                       <Icon name="map-marker-path" size={16} color="#1B5E20" style={{marginTop: 2}} />
-                       <Text style={styles.routeText} numberOfLines={2}>{trip.route}</Text>
-                    </View>
-                  </View>
-                </View>
-
-                {/* Footer: Template No */}
-                <View style={styles.footer}>
-                   <Text style={styles.footerText}>Ref: {trip.templateNo}</Text>
-                   {trip.ticketReferenceNo ? <Text style={styles.footerText}>Ticket: {trip.ticketReferenceNo}</Text> : null}
-                </View>
-
-              </Card.Content>
-            </Card>
-          );
-        })}
-
-        {filteredTrips.length === 0 && (
-           <View style={styles.emptyContainer}>
-              <Icon name="bus-clock" size={48} color="#CCC" />
-              <Text style={styles.emptyText}>No upcoming trips found</Text>
-           </View>
-        )}
-      </ScrollView>
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <MaterialCommunityIcons name="bus-alert" size={48} color="#ccc" />
+            <Text style={styles.emptyText}>No schedules found.</Text>
+            {(searchQuery || activeFilterId) && (
+               <Button mode="text" onPress={clearFilters} textColor="#1B5E20">Clear Search</Button>
+            )}
+          </View>
+        }
+      />
     </SafeAreaView>
   );
 }
@@ -179,180 +211,137 @@ export default function RoutesPage() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F7F9FC',
+    backgroundColor: '#F5F5F5',
   },
-  loadingContainer: { 
-    flex: 1, 
-    justifyContent: 'center', 
+  centerContent: {
+    justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F7F9FC'
   },
-  
-  // Header
-  header: {
+  headerContainer: {
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 20,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    padding: 16,
+    paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    borderBottomColor: '#E0E0E0',
   },
-  headerTitle: { 
-    fontWeight: '800', 
+  headerTitle: {
+    fontWeight: 'bold',
     color: '#1A1A1A',
-    letterSpacing: -0.5 
+    marginBottom: 12,
   },
-  headerSubtitle: { 
-    color: '#666666', 
-    marginTop: 2 
-  },
-  headerIconBg: {
-    backgroundColor: '#E8F5E9',
-    padding: 10,
+  searchBar: {
+    backgroundColor: '#F0F4F8',
+    elevation: 0,
     borderRadius: 12,
-  },
-
-  // Search
-  searchContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    backgroundColor: '#F7F9FC',
-  },
-  searchbar: {
-    borderRadius: 12,
-    backgroundColor: '#FFFFFF',
-    elevation: 2,
     height: 48,
   },
   searchInput: {
-    minHeight: 0, 
+    fontSize: 14,
+    alignSelf: 'center',
   },
-
-  // Content
-  scrollContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 32,
+  filterBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#D4EDDA',
+    padding: 8,
+    borderRadius: 8,
+    marginTop: 10,
+    gap: 8,
   },
-  resultsText: { 
-    color: '#888', 
-    marginBottom: 12, 
-    marginLeft: 4, 
+  filterText: {
+    flex: 1,
+    color: '#155724',
+    fontSize: 12,
     fontWeight: '600',
-    letterSpacing: 0.5
   },
-
-  // Trip Cards
-  tripCard: {
-    marginBottom: 14,
-    backgroundColor: '#FFFFFF',
+  clearFilterText: {
+    color: '#1B5E20',
+    fontWeight: 'bold',
+    fontSize: 12,
+    textDecorationLine: 'underline',
+  },
+  listContent: {
+    padding: 16,
+    paddingBottom: 80, // Space for bottom tab bar
+  },
+  card: {
+    backgroundColor: 'white',
+    marginBottom: 16,
     borderRadius: 16,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
+    alignItems: 'flex-start',
   },
-  dateBadge: {
+  companyContainer: {
     flexDirection: 'row',
+    gap: 12,
     alignItems: 'center',
-    backgroundColor: '#F5F5F5',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    gap: 6,
   },
-  dateText: {
+  companyName: {
+    fontWeight: 'bold',
+    color: '#1A1A1A',
+  },
+  busType: {
+    color: '#666',
     fontSize: 12,
-    fontWeight: '600',
-    color: '#444',
   },
   statusChip: {
-    height: 24,
-    borderWidth: 1,
-    backgroundColor: 'transparent',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  // Main Info Section
-  mainInfo: {
-    flexDirection: 'row',
+    backgroundColor: '#E0F7EC',
+    height: 30,
     alignItems: 'center',
   },
-  timeContainer: {
-    alignItems: 'center',
-    minWidth: 70,
-  },
-  timeText: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#1B5E20',
-  },
-  departureLabel: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: '#888',
-    marginTop: 2,
-  },
-  verticalDivider: {
-    width: 1,
-    height: 40,
-    backgroundColor: '#EEE',
-    marginHorizontal: 16,
-  },
-  routeContainer: {
-    flex: 1,
-  },
-  companyText: {
-    fontWeight: '700',
-    color: '#333',
-    marginBottom: 4,
+  divider: {
+    marginVertical: 12,
+    backgroundColor: '#F0F0F0',
   },
   routeRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 6,
-  },
-  routeText: {
-    color: '#555',
-    fontSize: 13,
-    flex: 1,
-    lineHeight: 18,
-  },
-
-  // Footer
-  footer: {
-    marginTop: 16,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#F5F5F5',
-    flexDirection: 'row',
     justifyContent: 'space-between',
   },
-  footerText: {
+  label: {
     fontSize: 11,
-    color: '#999',
-    fontFamily: 'monospace', 
+    color: '#888',
+    textTransform: 'uppercase',
+    marginBottom: 2,
+    fontWeight: '600',
   },
-
-  // Empty State
+  value: {
+    color: '#333',
+    fontWeight: '700',
+  },
+  timeValue: {
+    color: '#1B5E20',
+    fontWeight: 'bold',
+    textAlign: 'right',
+  },
+  dateValue: {
+    color: '#666',
+    textAlign: 'right',
+  },
+  footerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 16,
+    alignItems: 'center',
+  },
+  templateId: {
+    color: '#999',
+    fontSize: 10,
+  },
+  detailsLink: {
+    color: '#1B5E20',
+    fontWeight: '600',
+    fontSize: 13,
+  },
   emptyContainer: {
     alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 50,
-    opacity: 0.6,
+    marginTop: 60,
+    gap: 10,
   },
   emptyText: {
-    marginTop: 10,
-    fontSize: 16,
     color: '#888',
+    fontSize: 16,
   },
 });
