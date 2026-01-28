@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { StyleSheet, View, FlatList, RefreshControl, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { Text, Card, Searchbar, Chip, Avatar, Button, Divider } from 'react-native-paper';
+import { Text, Card, Searchbar, Avatar, Button, Divider } from 'react-native-paper';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';

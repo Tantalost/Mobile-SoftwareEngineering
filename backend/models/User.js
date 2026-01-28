@@ -1,11 +1,25 @@
-import mongoose from "mongoose";
+import mongoose from 'mongoose';
+import bcrypt from 'bcryptjs';
 
 const UserSchema = new mongoose.Schema({
+  username: { type: String, required: true },
   email: { type: String, required: true, unique: true },
-  password: { type: String, required: true }, // In production, hash this with bcrypt!
-  fullName: { type: String, required: true },
+  password: { type: String, required: true },
   contactNo: { type: String, required: true },
-  createdAt: { type: Date, default: Date.now }
+  
+  
+  resetPasswordOtp: { type: String },
+  resetPasswordExpires: { type: Date }
 });
 
-export default mongoose.model("User", UserSchema);
+
+UserSchema.pre('save', async function () {
+  
+  if (!this.isModified('password')) return;
+
+ 
+  const salt = await bcrypt.genSalt(10);
+  this.password = await bcrypt.hash(this.password, salt);
+});
+
+export default mongoose.model('User', UserSchema);
